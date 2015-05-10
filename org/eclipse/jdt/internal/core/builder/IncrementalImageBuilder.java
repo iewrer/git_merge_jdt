@@ -1,5 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
+<<<<<<< HEAD
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -230,6 +231,239 @@ protected void addDependentsOf(IPath path, boolean isStructuralChange, StringSet
 	if (isStructuralChange) {
 		String last = path.lastSegment();
 		if (last.length() == TypeConstants.PACKAGE_INFO_NAME.length)
+=======
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.builder;
+// GROOVY PATCHED
+
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
+import org.eclipse.core.resources.*;
+import org.eclipse.core.runtime.*;
+
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.internal.compiler.*;
+import org.eclipse.jdt.internal.compiler.classfmt.*;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+import org.eclipse.jdt.internal.compiler.problem.*;
+import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.util.Messages;
+import org.eclipse.jdt.internal.core.util.Util;
+
+import java.io.*;
+import java.net.URI;
+import java.util.*;
+
+/**
+ * The incremental image builder
+ */
+public class IncrementalImageBuilder extends AbstractImageBuilder {
+
+protected ArrayList sourceFiles;
+protected ArrayList previousSourceFiles;
+protected StringSet qualifiedStrings;
+protected StringSet simpleStrings;
+protected StringSet rootStrings;
+protected SimpleLookupTable secondaryTypesToRemove;
+protected boolean hasStructuralChanges;
+protected int compileLoop;
+protected boolean makeOutputFolderConsistent;
+
+public static int MaxCompileLoop = 5; // perform a full build if it takes more than ? incremental compile loops
+
+protected IncrementalImageBuilder(JavaBuilder javaBuilder, State buildState) {
+	super(javaBuilder, true, buildState);
+	this.nameEnvironment.isIncrementalBuild = true;
+	this.makeOutputFolderConsistent = JavaCore.ENABLED.equals(
+		javaBuilder.javaProject.getOption(JavaCore.CORE_JAVA_BUILD_RECREATE_MODIFIED_CLASS_FILES_IN_OUTPUT_FOLDER, true));
+}
+
+protected IncrementalImageBuilder(JavaBuilder javaBuilder) {
+	this(javaBuilder, null);
+	this.newState.copyFrom(javaBuilder.lastState);
+}
+
+protected IncrementalImageBuilder(BatchImageBuilder batchBuilder) {
+	this(batchBuilder.javaBuilder, batchBuilder.newState);
+	resetCollections();
+}
+
+public boolean build(SimpleLookupTable deltas) {
+	// initialize builder
+	// walk this project's deltas, find changed source files
+	// walk prereq projects' deltas, find changed class files & add affected source files
+	//   use the build state # to skip the deltas for certain prereq projects
+	//   ignore changed zip/jar files since they caused a full build
+	// compile the source files & acceptResult()
+	// compare the produced class files against the existing ones on disk
+	// recompile all dependent source files of any type with structural changes or new/removed secondary type
+	// keep a loop counter to abort & perform a full build
+
+	if (JavaBuilder.DEBUG)
+		System.out.println("INCREMENTAL build"); //$NON-NLS-1$
+
+	try {
+		resetCollections();
+
+		this.notifier.subTask(Messages.build_analyzingDeltas);
+		if (this.javaBuilder.hasBuildpathErrors()) {
+			// if a mssing class file was detected in the last build, a build state was saved since its no longer fatal
+			// but we need to rebuild every source file since problems were not recorded
+			// AND to avoid the infinite build scenario if this project is involved in a cycle, see bug 160550
+			// we need to avoid unnecessary deltas caused by doing a full build in this case
+			if (JavaBuilder.DEBUG)
+				System.out.println("COMPILING all source files since the buildpath has errors "); //$NON-NLS-1$
+			this.javaBuilder.currentProject.deleteMarkers(IJavaModelMarker.JAVA_MODEL_PROBLEM_MARKER, false, IResource.DEPTH_ZERO);
+			addAllSourceFiles(this.sourceFiles);
+			this.notifier.updateProgressDelta(0.25f);
+		} else {
+			IResourceDelta sourceDelta = (IResourceDelta) deltas.get(this.javaBuilder.currentProject);
+			if (sourceDelta != null)
+				if (!findSourceFiles(sourceDelta)) return false;
+			this.notifier.updateProgressDelta(0.10f);
+
+			Object[] keyTable = deltas.keyTable;
+			Object[] valueTable = deltas.valueTable;
+			for (int i = 0, l = valueTable.length; i < l; i++) {
+				IResourceDelta delta = (IResourceDelta) valueTable[i];
+				if (delta != null) {
+					IProject p = (IProject) keyTable[i];
+					ClasspathLocation[] classFoldersAndJars = (ClasspathLocation[]) this.javaBuilder.binaryLocationsPerProject.get(p);
+					if (classFoldersAndJars != null)
+						if (!findAffectedSourceFiles(delta, classFoldersAndJars, p)) return false;
+				}
+			}
+			this.notifier.updateProgressDelta(0.10f);
+
+			this.notifier.subTask(Messages.build_analyzingSources);
+			addAffectedSourceFiles();
+			this.notifier.updateProgressDelta(0.05f);
+		}
+
+		this.compileLoop = 0;
+		float increment = 0.40f;
+		while (this.sourceFiles.size() > 0) { // added to in acceptResult
+			if (++this.compileLoop > MaxCompileLoop) {
+				if (JavaBuilder.DEBUG)
+					System.out.println("ABORTING incremental build... exceeded loop count"); //$NON-NLS-1$
+				return false;
+			}
+			this.notifier.checkCancel();
+
+			SourceFile[] allSourceFiles = new SourceFile[this.sourceFiles.size()];
+			this.sourceFiles.toArray(allSourceFiles);
+			resetCollections();
+
+			this.workQueue.addAll(allSourceFiles);
+			this.notifier.setProgressPerCompilationUnit(increment / allSourceFiles.length);
+			increment = increment / 2;
+			compile(allSourceFiles);
+			removeSecondaryTypes();
+			addAffectedSourceFiles();
+		}
+		if (this.hasStructuralChanges && this.javaBuilder.javaProject.hasCycleMarker())
+			this.javaBuilder.mustPropagateStructuralChanges();
+	} catch (AbortIncrementalBuildException e) {
+		// abort the incremental build and let the batch builder handle the problem
+		if (JavaBuilder.DEBUG)
+			System.out.println("ABORTING incremental build... problem with " + e.qualifiedTypeName + //$NON-NLS-1$
+				". Likely renamed inside its existing source file."); //$NON-NLS-1$
+		return false;
+	} catch (CoreException e) {
+		throw internalException(e);
+	} finally {
+		cleanUp();
+	}
+	return true;
+}
+
+protected void buildAfterBatchBuild() {
+	// called from a batch builder once all source files have been compiled AND some changes
+	// need to be propagated incrementally (annotations, missing secondary types)
+
+	if (JavaBuilder.DEBUG)
+		System.out.println("INCREMENTAL build after batch build @ " + new Date(System.currentTimeMillis())); //$NON-NLS-1$
+
+	// this is a copy of the incremental build loop
+	try {
+		addAffectedSourceFiles();
+		while (this.sourceFiles.size() > 0) {
+			this.notifier.checkCancel();
+			SourceFile[] allSourceFiles = new SourceFile[this.sourceFiles.size()];
+			this.sourceFiles.toArray(allSourceFiles);
+			resetCollections();
+			this.notifier.setProgressPerCompilationUnit(0.08f / allSourceFiles.length);
+			this.workQueue.addAll(allSourceFiles);
+			compile(allSourceFiles);
+			removeSecondaryTypes();
+			addAffectedSourceFiles();
+		}
+	} catch (CoreException e) {
+		throw internalException(e);
+	} finally {
+		cleanUp();
+	}
+}
+
+protected void addAffectedSourceFiles() {
+	if (this.qualifiedStrings.elementSize == 0 && this.simpleStrings.elementSize == 0) return;
+
+	addAffectedSourceFiles(this.qualifiedStrings, this.simpleStrings, this.rootStrings, null);
+}
+
+protected void addAffectedSourceFiles(StringSet qualifiedSet, StringSet simpleSet, StringSet rootSet, StringSet affectedTypes) {
+	// the qualifiedStrings are of the form 'p1/p2' & the simpleStrings are just 'X'
+	char[][][] internedQualifiedNames = ReferenceCollection.internQualifiedNames(qualifiedSet);
+	// if a well known qualified name was found then we can skip over these
+	if (internedQualifiedNames.length < qualifiedSet.elementSize)
+		internedQualifiedNames = null;
+	char[][] internedSimpleNames = ReferenceCollection.internSimpleNames(simpleSet, true);
+	// if a well known name was found then we can skip over these
+	if (internedSimpleNames.length < simpleSet.elementSize)
+		internedSimpleNames = null;
+	char[][] internedRootNames = ReferenceCollection.internSimpleNames(rootSet, false);
+
+	Object[] keyTable = this.newState.references.keyTable;
+	Object[] valueTable = this.newState.references.valueTable;
+	next : for (int i = 0, l = valueTable.length; i < l; i++) {
+		String typeLocator = (String) keyTable[i];
+		if (typeLocator != null) {
+			if (affectedTypes != null && !affectedTypes.includes(typeLocator)) continue next;
+			ReferenceCollection refs = (ReferenceCollection) valueTable[i];
+			if (refs.includes(internedQualifiedNames, internedSimpleNames, internedRootNames)) {
+				IFile file = this.javaBuilder.currentProject.getFile(typeLocator);
+				SourceFile sourceFile = findSourceFile(file, true);
+				if (sourceFile == null) continue next;
+				if (this.sourceFiles.contains(sourceFile)) continue next;
+				if (this.compiledAllAtOnce && this.previousSourceFiles != null && this.previousSourceFiles.contains(sourceFile))
+					continue next; // can skip previously compiled files since already saw hierarchy related problems
+
+				if (JavaBuilder.DEBUG)
+					System.out.println("  adding affected source file " + typeLocator); //$NON-NLS-1$
+				this.sourceFiles.add(sourceFile);
+			}
+		}
+	}
+}
+
+protected void addDependentsOf(IPath path, boolean isStructuralChange) {
+	addDependentsOf(path, isStructuralChange, this.qualifiedStrings, this.simpleStrings, this.rootStrings);
+}
+
+protected void addDependentsOf(IPath path, boolean isStructuralChange, StringSet qualifiedNames, StringSet simpleNames, StringSet rootNames) {
+	path = path.setDevice(null);
+	if (isStructuralChange) {
+		String last = path.lastSegment();
+		if (last.length() == TypeConstants.PACKAGE_INFO_NAME.length)
+>>>>>>> patch
 			if (CharOperation.equals(last.toCharArray(), TypeConstants.PACKAGE_INFO_NAME)) {
 				path = path.removeLastSegments(1); // the package-info file has changed so blame the package itself
 				/* https://bugs.eclipse.org/bugs/show_bug.cgi?id=323785, in the case of default package,
@@ -561,7 +795,7 @@ protected boolean findSourceFiles(IResourceDelta sourceDelta, ClasspathMultiDire
 							if (this.sourceLocations[i].sourceFolder.getFolder(removedPackagePath).exists()) {
 								// only a package fragment was removed, same as removing multiple source files
 								if (md.hasIndependentOutputFolder)
-									createFolder(removedPackagePath, md.binaryFolder); // ensure package exists in the output folder
+								createFolder(removedPackagePath, md.binaryFolder); // ensure package exists in the output folder
 								IResourceDelta[] removedChildren = sourceDelta.getAffectedChildren();
 								for (int j = 0, m = removedChildren.length; j < m; j++)
 									if (!findSourceFiles(removedChildren[j], md, segmentCount))
@@ -590,7 +824,20 @@ protected boolean findSourceFiles(IResourceDelta sourceDelta, ClasspathMultiDire
 			if (isExcluded) return true;
 
 			String resourceName = resource.getName();
-			if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(resourceName)) {
+		    // GROOVY start
+		    // determine if this is a Groovy project
+		    final boolean isInterestingProject = LanguageSupportFactory.isInterestingProject(this.javaBuilder.getProject());
+		    // GROOVY end
+
+		    
+		    // GROOVY start
+		    /* old {
+		    if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(resourceName)) {
+		    } new */
+			// GRECLIPSE-404 must call 'isJavaLikeFile' directly in order to make the Scala-Eclipse plugin's weaving happy
+		    if ((!isInterestingProject && org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(resourceName) && !LanguageSupportFactory.isInterestingSourceFile(resourceName)) ||
+		    		(isInterestingProject && LanguageSupportFactory.isSourceFile(resourceName, isInterestingProject))) {
+		    // GROOVY end				
 				IPath typePath = resource.getFullPath().removeFirstSegments(segmentCount).removeFileExtension();
 				String typeLocator = resource.getProjectRelativePath().toString();
 				switch (sourceDelta.getKind()) {

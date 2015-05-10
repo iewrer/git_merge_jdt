@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -225,6 +226,214 @@ public class HandleFactory {
 					// inside field or initializer, must find proper one
 					TypeDeclaration type = methodScope.referenceType();
 					int occurenceCount = 1;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.util;
+
+import java.util.HashMap;
+import java.util.HashSet;
+
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.jdt.core.IClasspathEntry;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IMember;
+import org.eclipse.jdt.core.IPackageFragment;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.search.IJavaSearchScope;
+import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
+import org.eclipse.jdt.internal.compiler.lookup.MethodScope;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
+import org.eclipse.jdt.internal.core.*;
+import org.eclipse.jdt.internal.core.search.AbstractJavaSearchScope;
+import org.eclipse.jdt.internal.core.util.Util;
+
+/**
+ * Creates java element handles.
+ */
+public class HandleFactory {
+
+	/**
+	 * Cache package fragment root information to optimize speed performance.
+	 */
+	private String lastPkgFragmentRootPath;
+	private PackageFragmentRoot lastPkgFragmentRoot;
+
+	/**
+	 * Cache package handles to optimize memory.
+	 */
+	private HashtableOfArrayToObject packageHandles;
+
+	private JavaModel javaModel;
+
+	public HandleFactory() {
+		this.javaModel = JavaModelManager.getJavaModelManager().getJavaModel();
+	}
+
+
+	/**
+	 * Creates an Openable handle from the given resource path.
+	 * The resource path can be a path to a file in the workbench (e.g. /Proj/com/ibm/jdt/core/HandleFactory.java)
+	 * or a path to a file in a jar file - it then contains the path to the jar file and the path to the file in the jar
+	 * (e.g. c:/jdk1.2.2/jre/lib/rt.jar|java/lang/Object.class or /Proj/rt.jar|java/lang/Object.class)
+	 * NOTE: This assumes that the resource path is the toString() of an IPath,
+	 *       in other words, it uses the IPath.SEPARATOR for file path
+	 *            and it uses '/' for entries in a zip file.
+	 * If not null, uses the given scope as a hint for getting Java project handles.
+	 */
+	public Openable createOpenable(String resourcePath, IJavaSearchScope scope) {
+		int separatorIndex;
+		if ((separatorIndex= resourcePath.indexOf(IJavaSearchScope.JAR_FILE_ENTRY_SEPARATOR)) > -1) {
+			// path to a class file inside a jar
+			// Optimization: cache package fragment root handle and package handles
+			int rootPathLength;
+			if (this.lastPkgFragmentRootPath == null
+					|| (rootPathLength = this.lastPkgFragmentRootPath.length()) != resourcePath.length()
+					|| !resourcePath.regionMatches(0, this.lastPkgFragmentRootPath, 0, rootPathLength)) {
+				String jarPath= resourcePath.substring(0, separatorIndex);
+				PackageFragmentRoot root= getJarPkgFragmentRoot(resourcePath, separatorIndex, jarPath, scope);
+				if (root == null)
+					return null; // match is outside classpath
+				this.lastPkgFragmentRootPath= jarPath;
+				this.lastPkgFragmentRoot= root;
+				this.packageHandles= new HashtableOfArrayToObject(5);
+			}
+			// create handle
+			String classFilePath= resourcePath.substring(separatorIndex + 1);
+			String[] simpleNames = new Path(classFilePath).segments();
+			String[] pkgName;
+			int length = simpleNames.length-1;
+			if (length > 0) {
+				pkgName = new String[length];
+				System.arraycopy(simpleNames, 0, pkgName, 0, length);
+			} else {
+				pkgName = CharOperation.NO_STRINGS;
+			}
+			IPackageFragment pkgFragment= (IPackageFragment) this.packageHandles.get(pkgName);
+			if (pkgFragment == null) {
+				pkgFragment= this.lastPkgFragmentRoot.getPackageFragment(pkgName);
+				this.packageHandles.put(pkgName, pkgFragment);
+			}
+			IClassFile classFile= pkgFragment.getClassFile(simpleNames[length]);
+			return (Openable) classFile;
+		} else {
+			// path to a file in a directory
+			// Optimization: cache package fragment root handle and package handles
+			int rootPathLength = -1;
+			if (this.lastPkgFragmentRootPath == null
+				|| !(resourcePath.startsWith(this.lastPkgFragmentRootPath)
+					&& !org.eclipse.jdt.internal.compiler.util.Util.isExcluded(resourcePath.toCharArray(), this.lastPkgFragmentRoot.fullInclusionPatternChars(), this.lastPkgFragmentRoot.fullExclusionPatternChars(), false)
+					&& (rootPathLength = this.lastPkgFragmentRootPath.length()) > 0
+					&& resourcePath.charAt(rootPathLength) == '/')) {
+				PackageFragmentRoot root= getPkgFragmentRoot(resourcePath);
+				if (root == null)
+					return null; // match is outside classpath
+				this.lastPkgFragmentRoot = root;
+				this.lastPkgFragmentRootPath = this.lastPkgFragmentRoot.internalPath().toString();
+				this.packageHandles = new HashtableOfArrayToObject(5);
+			}
+			// create handle
+			resourcePath = resourcePath.substring(this.lastPkgFragmentRootPath.length() + 1);
+			String[] simpleNames = new Path(resourcePath).segments();
+			String[] pkgName;
+			int length = simpleNames.length-1;
+			if (length > 0) {
+				pkgName = new String[length];
+				System.arraycopy(simpleNames, 0, pkgName, 0, length);
+			} else {
+				pkgName = CharOperation.NO_STRINGS;
+			}
+			IPackageFragment pkgFragment= (IPackageFragment) this.packageHandles.get(pkgName);
+			if (pkgFragment == null) {
+				pkgFragment= this.lastPkgFragmentRoot.getPackageFragment(pkgName);
+				this.packageHandles.put(pkgName, pkgFragment);
+			}
+			String simpleName= simpleNames[length];
+			if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(simpleName)) {
+				ICompilationUnit unit= pkgFragment.getCompilationUnit(simpleName);
+				return (Openable) unit;
+			} else if (org.eclipse.jdt.internal.compiler.util.Util.isClassFileName(simpleName)){
+				IClassFile classFile= pkgFragment.getClassFile(simpleName);
+				return (Openable) classFile;
+			}
+			return null;
+		}
+	}
+
+	/**
+	 * Returns a handle denoting the class member identified by its scope.
+	 */
+	public IJavaElement createElement(ClassScope scope, ICompilationUnit unit, HashSet existingElements, HashMap knownScopes) {
+		return createElement(scope, scope.referenceContext.sourceStart, unit, existingElements, knownScopes);
+	}
+	/**
+	 * Create handle by adding child to parent obtained by recursing into parent scopes.
+	 */
+	private IJavaElement createElement(Scope scope, int elementPosition, ICompilationUnit unit, HashSet existingElements, HashMap knownScopes) {
+		IJavaElement newElement = (IJavaElement)knownScopes.get(scope);
+		if (newElement != null) return newElement;
+
+		switch(scope.kind) {
+			case Scope.COMPILATION_UNIT_SCOPE :
+				newElement = unit;
+				break;
+			case Scope.CLASS_SCOPE :
+				IJavaElement parentElement = createElement(scope.parent, elementPosition, unit, existingElements, knownScopes);
+				switch (parentElement.getElementType()) {
+					case IJavaElement.COMPILATION_UNIT :
+						newElement = ((ICompilationUnit)parentElement).getType(new String(scope.enclosingSourceType().sourceName));
+						break;
+					case IJavaElement.TYPE :
+						newElement = ((IType)parentElement).getType(new String(scope.enclosingSourceType().sourceName));
+						break;
+					case IJavaElement.FIELD :
+					case IJavaElement.INITIALIZER :
+					case IJavaElement.METHOD :
+					    IMember member = (IMember)parentElement;
+					    if (member.isBinary()) {
+					        return null;
+					    } else {
+							newElement = member.getType(new String(scope.enclosingSourceType().sourceName), 1);
+							// increment occurrence count if collision is detected
+							if (newElement != null) {
+								while (!existingElements.add(newElement)) ((SourceRefElement)newElement).occurrenceCount++;
+							}
+					    }
+						break;
+				}
+				if (newElement != null) {
+					knownScopes.put(scope, newElement);
+				}
+				break;
+			case Scope.METHOD_SCOPE :
+				IType parentType = (IType) createElement(scope.parent, elementPosition, unit, existingElements, knownScopes);
+				MethodScope methodScope = (MethodScope) scope;
+				if (methodScope.isInsideInitializer()) {
+					// inside field or initializer, must find proper one
+					TypeDeclaration type = methodScope.referenceType();
+					int occurenceCount = 1;
+>>>>>>> patch
 					int length = type.fields == null ? 0 : type.fields.length;
 					for (int i = 0; i < length; i++) {
 						FieldDeclaration field = type.fields[i];

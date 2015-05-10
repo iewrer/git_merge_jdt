@@ -10,6 +10,7 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+// GROOVY PATCHED
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.ITypeRoot;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
+<<<<<<< HEAD
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jdt.internal.compiler.util.Util;
 import org.eclipse.jface.text.IDocument;
@@ -56,6 +58,51 @@ public class CompilationUnit extends ASTNode {
 	private static final IProblem[] EMPTY_PROBLEMS = new IProblem[0];
 
 	/**
+=======
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.text.edits.TextEdit;
+
+/**
+ * Java compilation unit AST node type. This is the type of the root of an AST.
+ * <p>
+ * The source range for this type of node is ordinarily the entire source file,
+ * including leading and trailing whitespace and comments.
+ * </p>
+ * For JLS2:
+ * <pre>
+ * CompilationUnit:
+ *    [ PackageDeclaration ]
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | <b>;</b> }
+ * </pre>
+ * For JLS3, the kinds of type declarations
+ * grew to include enum and annotation type declarations:
+ * <pre>
+ * CompilationUnit:
+ *    [ PackageDeclaration ]
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | EnumDeclaration | AnnotationTypeDeclaration | <b>;</b> }
+ * </pre>
+ *
+ * @since 2.0
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
+public class CompilationUnit extends ASTNode {
+
+	/**
+	 * Canonical empty list of messages.
+	 */
+	private static final Message[] EMPTY_MESSAGES = new Message[0];
+
+	/**
+	 * Canonical empty list of problems.
+	 */
+	private static final IProblem[] EMPTY_PROBLEMS = new IProblem[0];
+
+	/**
+>>>>>>> patch
 	 * The "imports" structural property of this node type (element type: {@link ImportDeclaration}).
 	 *
 	 * @since 3.0
@@ -196,6 +243,9 @@ public class CompilationUnit extends ASTNode {
 	 *
 	 * @param ast the AST that is to own this node
 	 */
+	// GROOVY start: made protected from default
+	protected 
+	// GROOVY end
 	CompilationUnit(AST ast) {
 		super(ast);
 	}
@@ -203,6 +253,9 @@ public class CompilationUnit extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	// GROOVY start: make protected (from default)
+	protected
+	// GROOVY end
 	void accept0(ASTVisitor visitor) {
 		boolean visitChildren = visitor.visit(this);
 		if (visitChildren) {
@@ -878,6 +931,7 @@ public class CompilationUnit extends ASTNode {
 	 * To future-proof your code, <em>consider using an external {@link ASTRewrite} instead</em>,
 	 * which doesn't suffer from these limitations and allows to modify an AST in a non-destructive way.
 	 * </p>
+<<<<<<< HEAD
 	 *
 	 * @exception IllegalArgumentException if this compilation unit is
 	 * marked as unmodifiable, or if this compilation unit has already
@@ -896,6 +950,25 @@ public class CompilationUnit extends ASTNode {
 	 * code for this compilation unit.
 	 * <p>
 	 * The compilation unit must have been created by
+=======
+	 *
+	 * @exception IllegalArgumentException if this compilation unit is
+	 * marked as unmodifiable, or if this compilation unit has already
+	 * been tampered with, or recording has already been enabled
+	 * @since 3.0
+	 */
+	public void recordModifications() {
+		getAST().recordModifications(this);
+	}
+
+	/**
+	 * Converts all modifications recorded for this compilation
+	 * unit into an object representing the corresponding text
+	 * edits to the given document containing the original source
+	 * code for this compilation unit.
+	 * <p>
+	 * The compilation unit must have been created by
+>>>>>>> patch
 	 * {@link ASTParser} from the source code string in the
 	 * given document, and recording must have been turned
 	 * on with a prior call to {@link #recordModifications()}

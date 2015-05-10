@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -28,6 +29,37 @@ import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 public class StringLiteral extends Expression {
 
 	/**
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+
+package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
+
+/**
+ * String literal nodes.
+ *
+ * @since 2.0
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
+public class StringLiteral extends Expression {
+
+	/**
+>>>>>>> patch
 	 * The "escapedValue" structural property of this node type (type: {@link String}).
 	 * @since 3.0
 	 */

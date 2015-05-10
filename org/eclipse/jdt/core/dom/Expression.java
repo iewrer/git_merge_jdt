@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -17,6 +18,27 @@ package org.eclipse.jdt.core.dom;
  * <p>
  * <pre>
  * Expression:
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+
+package org.eclipse.jdt.core.dom;
+
+/**
+ * Abstract base class of AST nodes that represent expressions.
+ * There are several kinds of expressions.
+ * <p>
+ * <pre>
+ * Expression:
+>>>>>>> patch
  *    {@link Annotation},
  *    {@link ArrayAccess},
  *    {@link ArrayCreation},

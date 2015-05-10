@@ -1,5 +1,9 @@
 /*******************************************************************************
+<<<<<<< HEAD
  * Copyright (c) 2005, 2014 IBM Corporation and others.
+=======
+ * Copyright (c) 2005, 2012 IBM Corporation and others.
+>>>>>>> patch
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +15,7 @@
  *								bug 349326 - [1.7] new warning for missing try-with-resources
  *								bug 392099 - [1.8][compiler][null] Apply null annotation on types for null analysis
  *								bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
+<<<<<<< HEAD
  *								bug 392384 - [1.8][compiler][null] Restore nullness info from type annotations in class files
  *								Bug 392099 - [1.8][compiler][null] Apply null annotation on types for null analysis
  *								Bug 415291 - [1.8][null] differentiate type incompatibilities due to null annotations
@@ -34,6 +39,8 @@
  *								Bug 416182 - [1.8][compiler][null] Contradictory null annotations not rejected
  *								Bug 438458 - [1.8][null] clean up handling of null type annotations wrt type variables
  *								Bug 438179 - [1.8][null] 'Contradictory null annotations' error on type variable with explicit null-annotation.
+=======
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -760,9 +767,13 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 				this.tagBits |= someArgument.tagBits & (TagBits.HasTypeVariable | TagBits.HasMissingType | TagBits.ContainsNestedTypeReferences | TagBits.HasCapturedWildcard);
 			}
 		}
+<<<<<<< HEAD
 		this.tagBits |= someType.tagBits & (TagBits.IsLocalType| TagBits.IsMemberType | TagBits.IsNestedType | TagBits.ContainsNestedTypeReferences
 				 | TagBits.HasMissingType | TagBits.AnnotationNullMASK
 				 | TagBits.AnnotationNonNullByDefault | TagBits.AnnotationNullUnspecifiedByDefault | TagBits.HasCapturedWildcard);
+=======
+		this.tagBits |= someType.tagBits & (TagBits.IsLocalType| TagBits.IsMemberType | TagBits.IsNestedType | TagBits.HasMissingType | TagBits.ContainsNestedTypeReferences);
+>>>>>>> patch
 		this.tagBits &= ~(TagBits.AreFieldsComplete|TagBits.AreMethodsComplete);
 	}
 

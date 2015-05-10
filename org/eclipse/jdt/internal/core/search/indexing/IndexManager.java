@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -11,10 +12,27 @@
 package org.eclipse.jdt.internal.core.search.indexing;
 
 import java.io.*;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.search.indexing;
+// GROOVY PATCHED
+
+import java.io.*;
+>>>>>>> patch
 import java.net.URL;
 import java.util.*;
 import java.util.zip.CRC32;
 
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
 import org.eclipse.core.resources.*;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -62,6 +80,7 @@ public class IndexManager extends JobManager implements IIndexConstants {
 	public static final Integer UNKNOWN_STATE = new Integer(2);
 	public static final Integer REBUILDING_STATE = new Integer(3);
 	public static final Integer REUSE_STATE = new Integer(4);
+<<<<<<< HEAD
 	
 	// search participants who register indexes with the index manager
 	private SimpleLookupTable participantsContainers = null;
@@ -73,6 +92,23 @@ public class IndexManager extends JobManager implements IIndexConstants {
 	public synchronized void aboutToUpdateIndex(IPath containerPath, Integer newIndexState) {
 	// newIndexState is either UPDATING_STATE or REBUILDING_STATE
 	// must tag the index as inconsistent, in case we exit before the update job is started
+=======
+	
+	// search participants who register indexes with the index manager
+	private SimpleLookupTable participantsContainers = null;
+	private boolean participantUpdated = false;
+
+	// should JDT manage (update, delete as needed) pre-built indexes?
+	public static final String MANAGE_PRODUCT_INDEXES_PROPERTY = "jdt.core.manageProductIndexes"; //$NON-NLS-1$
+	private static final boolean IS_MANAGING_PRODUCT_INDEXES_PROPERTY = Boolean.getBoolean(MANAGE_PRODUCT_INDEXES_PROPERTY);
+
+	// Debug
+	public static boolean DEBUG = false;
+
+	public synchronized void aboutToUpdateIndex(IPath containerPath, Integer newIndexState) {
+	// newIndexState is either UPDATING_STATE or REBUILDING_STATE
+	// must tag the index as inconsistent, in case we exit before the update job is started
+>>>>>>> patch
 	IndexLocation indexLocation = computeIndexLocation(containerPath);
 	Object state = getIndexStates().get(indexLocation);
 	Integer currentIndexState = state == null ? UNKNOWN_STATE : (Integer) state;
@@ -130,12 +166,52 @@ public void cleanUpIndexes() {
 		for (int i = 0, l = keys.length; i < l; i++) {
 			IndexLocation key = (IndexLocation) keys[i];
 			if (key != null && !knownPaths.includes(key))
+<<<<<<< HEAD
 				locations[count++] = key;
 		}
 		if (count > 0)
 			removeIndexesState(locations);
 	}
 	deleteIndexFiles(knownPaths);
+=======
+				locations[count++] = key;
+		}
+		if (count > 0)
+			removeIndexesState(locations);
+	}
+	deleteIndexFiles(knownPaths);
+}
+/**
+ * Compute the pre-built index location for a specified URL
+ */
+public synchronized IndexLocation computeIndexLocation(IPath containerPath, final URL newIndexURL) {
+	IndexLocation indexLocation = (IndexLocation) this.indexLocations.get(containerPath);
+	if (indexLocation == null) {
+		if(newIndexURL != null) {
+			indexLocation = IndexLocation.createIndexLocation(newIndexURL);
+			// update caches
+			indexLocation = (IndexLocation) getIndexStates().getKey(indexLocation);
+			this.indexLocations.put(containerPath, indexLocation);
+		}
+	}
+	else {
+		// an existing index location exists - make sure it has not changed (i.e. the URL has not changed)
+		URL existingURL = indexLocation.getUrl();
+		if (newIndexURL != null) {
+			// if either URL is different then the index location has been updated so rebuild.
+			if(!newIndexURL.equals(existingURL)) {
+				// URL has changed so remove the old index and create a new one
+				this.removeIndex(containerPath);
+				// create a new one
+				indexLocation = IndexLocation.createIndexLocation(newIndexURL);
+				// update caches
+				indexLocation = (IndexLocation) getIndexStates().getKey(indexLocation);
+				this.indexLocations.put(containerPath, indexLocation);
+			}
+		}
+	}
+	return indexLocation;
+>>>>>>> patch
 }
 public synchronized IndexLocation computeIndexLocation(IPath containerPath) {
 	IndexLocation indexLocation = (IndexLocation) this.indexLocations.get(containerPath);
@@ -189,13 +265,25 @@ public SourceElementParser getSourceElementParser(IJavaProject project, ISourceE
 	Map options = project.getOptions(true);
 	options.put(JavaCore.COMPILER_TASK_TAGS, ""); //$NON-NLS-1$
 
-	SourceElementParser parser = new IndexingParser(
-		requestor,
-		new DefaultProblemFactory(Locale.getDefault()),
-		new CompilerOptions(options),
-		true, // index local declarations
-		true, // optimize string literals
-		false); // do not use source javadoc parser to speed up parsing
+    // GROOVY start
+    /* old {
+		SourceElementParser parser = new IndexingParser(
+				requestor,
+				new DefaultProblemFactory(Locale.getDefault()),
+				new CompilerOptions(options),
+				true, // index local declarations
+				true, // optimize string literals
+				false); // do not use source javadoc parser to speed up parsing
+    } new */
+	SourceElementParser parser = LanguageSupportFactory.getIndexingParser(
+			requestor,
+			new DefaultProblemFactory(Locale.getDefault()),
+			new CompilerOptions(options),
+			true, // index local declarations
+			true, // optimize string literals
+			false); // do not use source javadoc parser to speed up parsing
+	// GROOVY end
+	
 	parser.reportOnlyOneSyntaxError = true;
 
 	// Always check javadoc while indexing
@@ -277,7 +365,7 @@ public synchronized Index getIndex(IPath containerPath, IndexLocation indexLocat
 				indexLocation = computeIndexLocation(containerPath);
 				rebuildIndex(indexLocation, containerPath);
 				return null;
-			}
+		}
 		}
 		// index wasn't found on disk, consider creating an empty new one
 		if (createIfMissing) {
@@ -341,18 +429,18 @@ public Index[] getIndexes(IndexLocation[] locations, IProgressMonitor progressMo
 				}
 			} else {
 				if (indexLocation.isParticipantIndex() && indexLocation.exists()) { // the index belongs to non-jdt search participant
-					try {
-						IPath container = getParticipantsContainer(indexLocation);
-						if (container != null) {
+						try {
+							IPath container = getParticipantsContainer(indexLocation);
+							if (container != null) {
 							index = new Index(indexLocation, container.toOSString(), true /*reuse index file*/);
-							this.indexes.put(indexLocation, index);
+								this.indexes.put(indexLocation, index);
+							}
+						} catch (IOException e) {
+							// ignore
 						}
-					} catch (IOException e) {
-						// ignore
-					}
+					} 
 				}
 			}
-		}
 		if (index != null)
 			locatedIndexes[count++] = index; // only consider indexes which are ready
 	}
@@ -484,6 +572,7 @@ public void indexAll(IProject project) {
 			IClasspathEntry entry= entries[i];
 			if (entry.getEntryKind() == IClasspathEntry.CPE_LIBRARY)
 				indexLibrary(entry.getPath(), project, ((ClasspathEntry)entry).getLibraryIndexLocation());
+<<<<<<< HEAD
 		}
 	} catch(JavaModelException e){ // cannot retrieve classpath info
 	}
@@ -517,6 +606,54 @@ public void indexLibrary(IPath path, IProject requestingProject, URL indexURL) {
 	if (!isJobWaiting(request))
 		request(request);
 }
+=======
+		}
+	} catch(JavaModelException e){ // cannot retrieve classpath info
+	}
+
+	// check if the same request is not already in the queue
+	IndexRequest request = new IndexAllProject(project, this);
+	if (!isJobWaiting(request))
+		request(request);
+}
+public void indexLibrary(IPath path, IProject requestingProject, URL indexURL) {
+	this.indexLibrary(path, requestingProject, indexURL, false);
+}
+
+/**
+ * Trigger addition of a library to an index
+ * Note: the actual operation is performed in background
+ */
+public void indexLibrary(IPath path, IProject requestingProject, URL indexURL, final boolean updateIndex) {
+	// requestingProject is no longer used to cancel jobs but leave it here just in case
+	IndexLocation indexFile = null;
+	if(indexURL != null) {
+		if(IS_MANAGING_PRODUCT_INDEXES_PROPERTY) {
+			indexFile = computeIndexLocation(path, indexURL);
+		}
+		else {
+			indexFile = IndexLocation.createIndexLocation(indexURL);
+		}
+	}
+	if (JavaCore.getPlugin() == null) return;
+	IndexRequest request = null;
+	boolean forceIndexUpdate = IS_MANAGING_PRODUCT_INDEXES_PROPERTY && updateIndex;
+	Object target = JavaModel.getTarget(path, true);
+	if (target instanceof IFile) {
+		request = new AddJarFileToIndex((IFile) target, indexFile, this, forceIndexUpdate);
+	} else if (target instanceof File) {
+		request = new AddJarFileToIndex(path, indexFile, this, forceIndexUpdate);
+	} else if (target instanceof IContainer) {
+		request = new IndexBinaryFolder((IContainer) target, this);
+	} else {
+		return;
+	}
+
+	// check if the same request is not already in the queue
+	if (!isJobWaiting(request))
+		request(request);
+}
+>>>>>>> patch
 
 synchronized boolean addIndex(IPath containerPath, IndexLocation indexFile) {
 	getIndexStates().put(indexFile, REUSE_STATE);
@@ -670,6 +807,7 @@ public synchronized void removeIndex(IPath containerPath) {
 		indexLocation.close();
 		this.indexLocations.put(containerPath, null);
 	} else if (indexFile != null && indexFile.exists()) {
+<<<<<<< HEAD
 		if (DEBUG)
 			Util.verbose("removing index file " + indexFile); //$NON-NLS-1$
 		indexFile.delete();
@@ -685,6 +823,26 @@ public synchronized void removeIndexPath(IPath path) {
 		Util.verbose("removing index path " + path); //$NON-NLS-1$
 	Object[] keyTable = this.indexes.keyTable;
 	Object[] valueTable = this.indexes.valueTable;
+=======
+		if (DEBUG)
+			Util.verbose("removing index file " + indexFile); //$NON-NLS-1$
+		indexFile.delete();
+	}
+	this.indexes.removeKey(indexLocation);
+	if (IS_MANAGING_PRODUCT_INDEXES_PROPERTY) {
+		this.indexLocations.removeKey(containerPath);
+	}
+	updateIndexState(indexLocation, null);
+}
+/**
+ * Removes all indexes whose paths start with (or are equal to) the given path.
+ */
+public synchronized void removeIndexPath(IPath path) {
+	if (VERBOSE || DEBUG)
+		Util.verbose("removing index path " + path); //$NON-NLS-1$
+	Object[] keyTable = this.indexes.keyTable;
+	Object[] valueTable = this.indexes.valueTable;
+>>>>>>> patch
 	IndexLocation[] locations = null;
 	int max = this.indexes.elementSize;
 	int count = 0;
@@ -991,6 +1149,7 @@ private synchronized void removeIndexesState(IndexLocation[] locations) {
 }
 private synchronized void updateIndexState(IndexLocation indexLocation, Integer indexState) {
 	if (indexLocation == null)
+<<<<<<< HEAD
 		throw new IllegalArgumentException();
 
 	getIndexStates(); // ensure the states are initialized
@@ -1018,10 +1177,40 @@ private synchronized void updateIndexState(IndexLocation indexLocation, Integer 
 	}
 
 }
+=======
+		throw new IllegalArgumentException();
+
+	getIndexStates(); // ensure the states are initialized
+	if (indexState != null) {
+		if (indexState.equals(this.indexStates.get(indexLocation))) return; // not changed
+		this.indexStates.put(indexLocation, indexState);
+	} else {
+		if (!this.indexStates.containsKey(indexLocation)) return; // did not exist anyway
+		this.indexStates.removeKey(indexLocation);
+	}
+
+	writeSavedIndexNamesFile();
+
+	if (VERBOSE) {
+		if (indexState == null) {
+			Util.verbose("-> index state removed for: "+indexLocation); //$NON-NLS-1$
+		} else {
+			String state = "?"; //$NON-NLS-1$
+			if (indexState == SAVED_STATE) state = "SAVED"; //$NON-NLS-1$
+			else if (indexState == UPDATING_STATE) state = "UPDATING"; //$NON-NLS-1$
+			else if (indexState == UNKNOWN_STATE) state = "UNKNOWN"; //$NON-NLS-1$
+			else if (indexState == REBUILDING_STATE) state = "REBUILDING"; //$NON-NLS-1$
+			else if (indexState == REUSE_STATE) state = "REUSE"; //$NON-NLS-1$
+			Util.verbose("-> index state updated to: " + state + " for: "+indexLocation); //$NON-NLS-1$ //$NON-NLS-2$
+		}
+	}
+
+}
+>>>>>>> patch
 public void updateParticipant(IPath indexPath, IPath containerPath) {
 	if (this.participantsContainers == null) {
 		readParticipantsIndexNamesFile();
-	}
+	} 
 	IndexLocation indexLocation = new FileIndexLocation(indexPath.toFile(), true);
 	if (this.participantsContainers.get(indexLocation) == null) {
 		this.participantsContainers.put(indexLocation, containerPath);

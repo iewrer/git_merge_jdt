@@ -10,6 +10,7 @@
  *     Terry Parker <tparker@google.com> 
  *           - Contribution for https://bugs.eclipse.org/bugs/show_bug.cgi?id=372418
  *           -  Another problem with inner classes referenced from jars or class folders: "The type ... cannot be resolved"
+<<<<<<< HEAD
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.builder;
 
@@ -117,6 +118,117 @@ private void computeClasspathLocations(
 						createOutputFolder(outputFolder);
 				}
 				sLocations.add(
+=======
+ *     Stephan Herrmann - Contribution for
+ *								Bug 392727 - Cannot compile project when a java file contains $ in its file name
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.builder;
+// GROOVY PATCHED
+import org.eclipse.core.resources.*;
+import org.eclipse.core.runtime.*;
+
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.env.*;
+import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
+import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
+import org.eclipse.jdt.internal.compiler.util.SimpleSet;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.*;
+
+import java.io.*;
+import java.util.*;
+
+public class NameEnvironment implements INameEnvironment, SuffixConstants {
+
+boolean isIncrementalBuild;
+ClasspathMultiDirectory[] sourceLocations;
+ClasspathLocation[] binaryLocations;
+BuildNotifier notifier;
+
+SimpleSet initialTypeNames; // assumed that each name is of the form "a/b/ClassName"
+SimpleLookupTable additionalUnits;
+
+NameEnvironment(IWorkspaceRoot root, JavaProject javaProject, SimpleLookupTable binaryLocationsPerProject, BuildNotifier notifier) throws CoreException {
+	this.isIncrementalBuild = false;
+	this.notifier = notifier;
+	computeClasspathLocations(root, javaProject, binaryLocationsPerProject);
+	setNames(null, null);
+}
+
+public NameEnvironment(IJavaProject javaProject) {
+	this.isIncrementalBuild = false;
+	try {
+		computeClasspathLocations(javaProject.getProject().getWorkspace().getRoot(), (JavaProject) javaProject, null);
+	} catch(CoreException e) {
+		this.sourceLocations = new ClasspathMultiDirectory[0];
+		this.binaryLocations = new ClasspathLocation[0];
+	}
+	setNames(null, null);
+}
+
+/* Some examples of resolved class path entries.
+* Remember to search class path in the order that it was defined.
+*
+* 1a. typical project with no source folders:
+*   /Test[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test
+* 1b. project with source folders:
+*   /Test/src1[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test/src1
+*   /Test/src2[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test/src2
+*  NOTE: These can be in any order & separated by prereq projects or libraries
+* 1c. project external to workspace (only detectable using getLocation()):
+*   /Test/src[CPE_SOURCE][K_SOURCE] -> d:/eclipse.zzz/src
+*  Need to search source folder & output folder
+*
+* 2. zip files:
+*   D:/j9/lib/jclMax/classes.zip[CPE_LIBRARY][K_BINARY][sourcePath:d:/j9/lib/jclMax/source/source.zip]
+*      -> D:/j9/lib/jclMax/classes.zip
+*  ALWAYS want to take the library path as is
+*
+* 3a. prereq project (regardless of whether it has a source or output folder):
+*   /Test[CPE_PROJECT][K_SOURCE] -> D:/eclipse.test/Test
+*  ALWAYS want to append the output folder & ONLY search for .class files
+*/
+private void computeClasspathLocations(
+	IWorkspaceRoot root,
+	JavaProject javaProject,
+	SimpleLookupTable binaryLocationsPerProject) throws CoreException {
+
+	/* Update cycle marker */
+	IMarker cycleMarker = javaProject.getCycleMarker();
+	if (cycleMarker != null) {
+		int severity = JavaCore.ERROR.equals(javaProject.getOption(JavaCore.CORE_CIRCULAR_CLASSPATH, true))
+			? IMarker.SEVERITY_ERROR
+			: IMarker.SEVERITY_WARNING;
+		if (severity != cycleMarker.getAttribute(IMarker.SEVERITY, severity))
+			cycleMarker.setAttribute(IMarker.SEVERITY, severity);
+	}
+
+	IClasspathEntry[] classpathEntries = javaProject.getExpandedClasspath();
+	ArrayList sLocations = new ArrayList(classpathEntries.length);
+	ArrayList bLocations = new ArrayList(classpathEntries.length);
+	nextEntry : for (int i = 0, l = classpathEntries.length; i < l; i++) {
+		ClasspathEntry entry = (ClasspathEntry) classpathEntries[i];
+		IPath path = entry.getPath();
+		Object target = JavaModel.getTarget(path, true);
+		if (target == null) continue nextEntry;
+
+		switch(entry.getEntryKind()) {
+			case IClasspathEntry.CPE_SOURCE :
+				if (!(target instanceof IContainer)) continue nextEntry;
+				IPath outputPath = entry.getOutputLocation() != null
+					? entry.getOutputLocation()
+					: javaProject.getOutputLocation();
+				IContainer outputFolder;
+				if (outputPath.segmentCount() == 1) {
+					outputFolder = javaProject.getProject();
+				} else {
+					outputFolder = root.getFolder(outputPath);
+					if (!outputFolder.exists())
+						createOutputFolder(outputFolder);
+				}
+				sLocations.add(
+>>>>>>> patch
 					ClasspathLocation.forSourceFolder((IContainer) target, outputFolder, entry.fullInclusionPatternChars(), entry.fullExclusionPatternChars(), entry.ignoreOptionalProblems()));
 				continue nextEntry;
 
@@ -259,6 +371,11 @@ private void createParentFolder(IContainer parent) throws CoreException {
 	}
 }
 
+//GROOVY GRECLIPSE-1594
+public boolean avoidAdditionalGroovyAnswers = false;
+private static char[] groovySuffixAsChars = ".groovy".toCharArray(); //$NON-NLS-1$
+//GRECLIPSE end
+
 private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeName) {
 	if (this.notifier != null)
 		this.notifier.checkCancelWithinCompiler();
@@ -276,6 +393,7 @@ private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeNam
 		// let the recompile loop fix up dependents when the secondary type Y has been deleted from X.java
 		// Only enclosing type names are present in the additional units table, so strip off inner class specifications
 		// when doing the lookup (https://bugs.eclipse.org/372418). 
+<<<<<<< HEAD
 		// Also take care of $ in the name of the class (https://bugs.eclipse.org/Bug 377401)
 		int index = qualifiedTypeName.indexOf('$');
 		if (index > 0) {
@@ -372,3 +490,116 @@ void setNames(String[] typeNames, SourceFile[] additionalFiles) {
 		this.binaryLocations[i].reset();
 }
 }
+=======
+		// Also take care of $ in the name of the class (https://bugs.eclipse.org/377401)
+		// and prefer name with '$' if unit exists rather than failing to search for nested class (https://bugs.eclipse.org/392727)
+		SourceFile unit = (SourceFile) this.additionalUnits.get(qualifiedTypeName); // doesn't have file extension
+		// GROOVY patch
+		if (this.avoidAdditionalGroovyAnswers && unit!=null) {
+			if (CharOperation.endsWith(unit.getFileName(),groovySuffixAsChars)) {
+				unit = null;
+			}
+		}
+		// GROOVY end
+		if (unit != null)
+			return new NameEnvironmentAnswer(unit, null /*no access restriction*/);
+		int index = qualifiedTypeName.indexOf('$');
+		if (index > 0) {
+			String enclosingTypeName = qualifiedTypeName.substring(0, index);
+			unit = (SourceFile) this.additionalUnits.get(enclosingTypeName); // doesn't have file extension
+			// GROOVY start
+			if (this.avoidAdditionalGroovyAnswers && unit!=null) {
+				if (CharOperation.endsWith(unit.getFileName(),groovySuffixAsChars)) {
+					unit = null;
+				}
+			}
+			// GROOVY end
+			if (unit != null)
+				return new NameEnvironmentAnswer(unit, null /*no access restriction*/);
+		}
+	}
+
+	String qBinaryFileName = qualifiedTypeName + SUFFIX_STRING_class;
+	String binaryFileName = qBinaryFileName;
+	String qPackageName =  ""; //$NON-NLS-1$
+	if (qualifiedTypeName.length() > typeName.length) {
+		int typeNameStart = qBinaryFileName.length() - typeName.length - 6; // size of ".class"
+		qPackageName =  qBinaryFileName.substring(0, typeNameStart - 1);
+		binaryFileName = qBinaryFileName.substring(typeNameStart);
+	}
+
+	// NOTE: the output folders are added at the beginning of the binaryLocations
+	NameEnvironmentAnswer suggestedAnswer = null;
+	for (int i = 0, l = this.binaryLocations.length; i < l; i++) {
+		NameEnvironmentAnswer answer = this.binaryLocations[i].findClass(binaryFileName, qPackageName, qBinaryFileName);
+		if (answer != null) {
+			if (!answer.ignoreIfBetter()) {
+				if (answer.isBetter(suggestedAnswer))
+					return answer;
+			} else if (answer.isBetter(suggestedAnswer))
+				// remember suggestion and keep looking
+				suggestedAnswer = answer;
+		}
+	}
+	if (suggestedAnswer != null)
+		// no better answer was found
+		return suggestedAnswer;
+	return null;
+}
+
+public NameEnvironmentAnswer findType(char[][] compoundName) {
+	if (compoundName != null)
+		return findClass(
+			new String(CharOperation.concatWith(compoundName, '/')),
+			compoundName[compoundName.length - 1]);
+	return null;
+}
+
+public NameEnvironmentAnswer findType(char[] typeName, char[][] packageName) {
+	if (typeName != null)
+		return findClass(
+			new String(CharOperation.concatWith(packageName, typeName, '/')),
+			typeName);
+	return null;
+}
+
+public boolean isPackage(char[][] compoundName, char[] packageName) {
+	return isPackage(new String(CharOperation.concatWith(compoundName, packageName, '/')));
+}
+
+public boolean isPackage(String qualifiedPackageName) {
+	// NOTE: the output folders are added at the beginning of the binaryLocations
+	for (int i = 0, l = this.binaryLocations.length; i < l; i++)
+		if (this.binaryLocations[i].isPackage(qualifiedPackageName))
+			return true;
+	return false;
+}
+
+void setNames(String[] typeNames, SourceFile[] additionalFiles) {
+	// convert the initial typeNames to a set
+	if (typeNames == null) {
+		this.initialTypeNames = null;
+	} else {
+		this.initialTypeNames = new SimpleSet(typeNames.length);
+		for (int i = 0, l = typeNames.length; i < l; i++)
+			this.initialTypeNames.add(typeNames[i]);
+	}
+	// map the additional source files by qualified type name
+	if (additionalFiles == null) {
+		this.additionalUnits = null;
+	} else {
+		this.additionalUnits = new SimpleLookupTable(additionalFiles.length);
+		for (int i = 0, l = additionalFiles.length; i < l; i++) {
+			SourceFile additionalUnit = additionalFiles[i];
+			if (additionalUnit != null)
+				this.additionalUnits.put(additionalUnit.initialTypeName, additionalFiles[i]);
+		}
+	}
+
+	for (int i = 0, l = this.sourceLocations.length; i < l; i++)
+		this.sourceLocations[i].reset();
+	for (int i = 0, l = this.binaryLocations.length; i < l; i++)
+		this.binaryLocations[i].reset();
+}
+}
+>>>>>>> patch

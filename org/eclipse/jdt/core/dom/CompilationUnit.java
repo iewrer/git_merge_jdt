@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2011 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -63,6 +64,75 @@ public class CompilationUnit extends ASTNode {
 	private static final IProblem[] EMPTY_PROBLEMS = new IProblem[0];
 
 	/**
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+
+package org.eclipse.jdt.core.dom;
+// GROOVY PATCHED
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.ITypeRoot;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.text.edits.TextEdit;
+
+/**
+ * Java compilation unit AST node type. This is the type of the root of an AST.
+ * <p>
+ * The source range for this type of node is ordinarily the entire source file,
+ * including leading and trailing whitespace and comments.
+ * </p>
+ * For JLS2:
+ * <pre>
+ * CompilationUnit:
+ *    [ PackageDeclaration ]
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | <b>;</b> }
+ * </pre>
+ * For JLS3, the kinds of type declarations
+ * grew to include enum and annotation type declarations:
+ * <pre>
+ * CompilationUnit:
+ *    [ PackageDeclaration ]
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | EnumDeclaration | AnnotationTypeDeclaration | <b>;</b> }
+ * </pre>
+ *
+ * @since 2.0
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
+public class CompilationUnit extends ASTNode {
+
+	/**
+	 * Canonical empty list of messages.
+	 */
+	private static final Message[] EMPTY_MESSAGES = new Message[0];
+
+	/**
+	 * Canonical empty list of problems.
+	 */
+	private static final IProblem[] EMPTY_PROBLEMS = new IProblem[0];
+
+	/**
+>>>>>>> patch
 	 * The "imports" structural property of this node type (element type: {@link ImportDeclaration}).
 	 *
 	 * @since 3.0
@@ -203,6 +273,9 @@ public class CompilationUnit extends ASTNode {
 	 *
 	 * @param ast the AST that is to own this node
 	 */
+	// GROOVY start: made protected from default
+	protected 
+	// GROOVY end
 	CompilationUnit(AST ast) {
 		super(ast);
 	}
@@ -210,6 +283,9 @@ public class CompilationUnit extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	// GROOVY start: make protected (from default)
+	protected
+	// GROOVY end
 	void accept0(ASTVisitor visitor) {
 		boolean visitChildren = visitor.visit(this);
 		if (visitChildren) {
@@ -868,6 +944,7 @@ public class CompilationUnit extends ASTNode {
 	/**
 	 * Enables the recording of changes to this compilation
 	 * unit and its descendants. The compilation unit must have
+<<<<<<< HEAD
 	 * been created by <code>ASTParser</code> and still be in
 	 * its original state. Once recording is on,
 	 * arbitrary changes to the subtree rooted at this compilation
@@ -1082,6 +1159,228 @@ public class CompilationUnit extends ASTNode {
      * </p>
 	 *
 	 * @return the live list of top-level type declaration
+=======
+	 * been created by {@link ASTParser} and still be in
+	 * its original state. Once recording is on,
+	 * arbitrary changes to the subtree rooted at this compilation
+	 * unit are recorded internally. Once the modification has
+	 * been completed, call {@link #rewrite(IDocument, Map)} to get an object
+	 * representing the corresponding edits to the original
+	 * source code string.
+	 * <p>
+	 * Note that this way of manipulating an AST only allows a single line of modifications.
+	 * To modify an AST in a non-destructive way, use an external {@link ASTRewrite}.
+	 * As an added benefit, you can then also use
+	 * {@link ASTRewrite#createStringPlaceholder(String, int) string placeholders} and
+	 * {@link ASTRewrite#createCopyTarget(ASTNode) copy} nodes including comments and formatting.
+	 * </p>
+	 *
+	 * @exception IllegalArgumentException if this compilation unit is
+	 * marked as unmodifiable, or if this compilation unit has already
+	 * been tampered with, or recording has already been enabled
+	 * @since 3.0
+	 */
+	public void recordModifications() {
+		getAST().recordModifications(this);
+	}
+
+	/**
+	 * Converts all modifications recorded for this compilation
+	 * unit into an object representing the corresponding text
+	 * edits to the given document containing the original source
+	 * code for this compilation unit.
+	 * <p>
+	 * The compilation unit must have been created by
+	 * {@link ASTParser} from the source code string in the
+	 * given document, and recording must have been turned
+	 * on with a prior call to {@link #recordModifications()}
+	 * while the AST was still in its original state.
+	 * </p>
+	 * <p>
+	 * Calling this methods does not discard the modifications
+	 * on record. Subsequence modifications made to the AST
+	 * are added to the ones already on record. If this method
+	 * is called again later, the resulting text edit object will
+	 * accurately reflect the net cumulative effect of all those
+	 * changes.
+	 * </p>
+	 *
+	 * @param document original document containing source code
+	 * for this compilation unit
+	 * @param options the table of formatter options
+	 * (key type: <code>String</code>; value type: <code>String</code>);
+	 * or <code>null</code> to use the standard global options
+	 * {@link org.eclipse.jdt.core.JavaCore#getOptions() JavaCore.getOptions()}.
+	 * @return text edit object describing the changes to the
+	 * document corresponding to the recorded AST modifications
+	 * @exception IllegalArgumentException if the document passed is
+	 * <code>null</code> or does not correspond to this AST
+	 * @exception IllegalStateException if <code>recordModifications</code>
+	 * was not called to enable recording
+	 * @see #recordModifications()
+	 * @since 3.0
+	 */
+	public TextEdit rewrite(IDocument document, Map options) {
+		return getAST().rewrite(document, options);
+	}
+
+	/**
+	 * Sets the list of the comments encountered while parsing
+	 * this compilation unit.
+	 *
+	 * @param commentTable a list of comments in increasing order
+	 * of source start position, or <code>null</code> if comment
+	 * information for this compilation unit is not available
+	 * @exception IllegalArgumentException if the comment table is
+	 * not in increasing order of source position
+	 * @see #getCommentList()
+	 * @see ASTParser
+	 * @since 3.0
+	 */
+	void setCommentTable(Comment[] commentTable) {
+		// double check table to ensure that all comments have
+		// source positions and are in strictly increasing order
+		if (commentTable == null) {
+			this.optionalCommentList = null;
+			this.optionalCommentTable = null;
+		} else {
+			int nextAvailablePosition = 0;
+			for (int i = 0; i < commentTable.length; i++) {
+				Comment comment = commentTable[i];
+				if (comment == null) {
+					throw new IllegalArgumentException();
+				}
+				int start = comment.getStartPosition();
+				int length = comment.getLength();
+				if (start < 0 || length < 0 || start < nextAvailablePosition) {
+					throw new IllegalArgumentException();
+				}
+				nextAvailablePosition = comment.getStartPosition() + comment.getLength();
+			}
+			this.optionalCommentTable = commentTable;
+			List commentList = Arrays.asList(commentTable);
+			// protect the list from further modification
+			this.optionalCommentList = Collections.unmodifiableList(commentList);
+		}
+	}
+
+	/**
+	 * Sets the Java type root (a {@link org.eclipse.jdt.core.ICompilationUnit compilation unit} or a {@link org.eclipse.jdt.core.IClassFile class file})
+	 * this compilation unit was created from, or <code>null</code> if it was not created from a Java type root.
+	 *
+	 * @param typeRoot the Java type root this compilation unit was created from
+	 */
+	void setTypeRoot(ITypeRoot typeRoot) {
+		this.typeRoot = typeRoot;
+	}
+
+	/**
+	 * Sets the line end table for this compilation unit.
+	 * If <code>lineEndTable[i] == p</code> then line number <code>i+1</code>
+	 * ends at character position <code>p</code>. Except for the last line, the
+	 * positions are that of (the last character of) the line delimiter.
+	 * For example, the source string <code>A\nB\nC</code> has
+	 * line end table {1, 3, 4}.
+	 *
+	 * @param lineEndTable the line end table
+	 */
+	void setLineEndTable(int[] lineEndTable) {
+		if (lineEndTable == null) {
+			throw new NullPointerException();
+		}
+		// alternate root is *not* considered a structural property
+		// but we protect them nevertheless
+		checkModifiable();
+		this.lineEndTable = lineEndTable;
+	}
+
+	/**
+	 * Sets or clears the package declaration of this compilation unit
+	 * node to the given package declaration node.
+	 *
+	 * @param pkgDecl the new package declaration node, or
+	 *   <code>null</code> if this compilation unit does not have a package
+	 *   declaration (that is in the default package)
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
+	 */
+	public void setPackage(PackageDeclaration pkgDecl) {
+		ASTNode oldChild = this.optionalPackageDeclaration;
+		preReplaceChild(oldChild, pkgDecl, PACKAGE_PROPERTY);
+		this.optionalPackageDeclaration = pkgDecl;
+		postReplaceChild(oldChild, pkgDecl, PACKAGE_PROPERTY);
+	}
+
+
+	/**
+	 * Sets the array of problems reported by the compiler during the parsing or
+	 * name resolution of this compilation unit.
+	 *
+	 * @param problems the list of problems
+	 */
+	void setProblems(IProblem[] problems) {
+		if (problems == null) {
+			throw new IllegalArgumentException();
+		}
+		this.problems = problems;
+	}
+	
+	/**
+	 * Internal method
+	 * 
+	 * Sets internal data used to perform statements recovery.
+	 * @param data
+	 * 
+	 * @since 3.5
+	 */
+	void setStatementsRecoveryData(Object data) {
+		this.statementsRecoveryData = data;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	int treeSize() {
+		int size = memSize();
+		if (this.optionalPackageDeclaration != null) {
+			size += getPackage().treeSize();
+		}
+		size += this.imports.listSize();
+		size += this.types.listSize();
+		// include disconnected comments
+		if (this.optionalCommentList != null) {
+			for (int i = 0; i < this.optionalCommentList.size(); i++) {
+				Comment comment = (Comment) this.optionalCommentList.get(i);
+				if (comment != null && comment.getParent() == null) {
+					size += comment.treeSize();
+				}
+			}
+		}
+		return size;
+	}
+
+	/**
+	 * Returns the live list of nodes for the top-level type declarations of this
+	 * compilation unit, in order of appearance.
+     * <p>
+     * Note that in JLS3, the types may include both enum declarations
+     * and annotation type declarations introduced in J2SE 5.
+     * For JLS2, the elements are always <code>TypeDeclaration</code>.
+     * </p>
+	 *
+	 * @return the live list of top-level type declaration
+>>>>>>> patch
 	 *    nodes (element type: {@link AbstractTypeDeclaration})
 	 */
 	public List types() {

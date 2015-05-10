@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -27,6 +28,39 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public abstract class Annotation extends Expression {
 
 	final static MemberValuePair[] NoValuePairs = new MemberValuePair[0];
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Stephan Herrmann - Contributions for
+ *								bug 186342 - [compiler][null] Using annotations for null checking
+ *								bug 365662 - [compiler][null] warn on contradictory and redundant null annotations
+ *								bug 331649 - [compiler][null] consider null annotations for fields
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler.ast;
+// GROOVY PATCHED
+
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.impl.IrritantSet;
+import org.eclipse.jdt.internal.compiler.lookup.*;
+
+/**
+ * Annotation
+ */
+public abstract class Annotation extends Expression {
+
+	final static MemberValuePair[] NoValuePairs = new MemberValuePair[0];
+>>>>>>> patch
 	private static final long TAGBITS_NULLABLE_OR_NONNULL = TagBits.AnnotationNullable|TagBits.AnnotationNonNull;
 
 	public int declarationSourceEnd;
@@ -185,7 +219,7 @@ public abstract class Annotation extends Expression {
 					// parameter 'false' means: this annotation cancels any defaults
 					tagBits |= TagBits.AnnotationNullUnspecifiedByDefault;
 					break;
-				}
+		}
 				tagBits |= TagBits.AnnotationNonNullByDefault;
 				break;
 		}
@@ -395,6 +429,7 @@ public abstract class Annotation extends Expression {
 							scope.problemReporter().contradictoryNullAnnotations(this);
 							sourceMethod.tagBits &= ~TAGBITS_NULLABLE_OR_NONNULL; // avoid secondary problems
 						}
+<<<<<<< HEAD
 						break;
 					case Binding.FIELD :
 						FieldBinding sourceField = (FieldBinding) this.recipient;
@@ -412,6 +447,29 @@ public abstract class Annotation extends Expression {
 							 LocalDeclaration localDeclaration = variable.declaration;
 							recordSuppressWarnings(scope, localDeclaration.declarationSourceStart, localDeclaration.declarationSourceEnd, scope.compilerOptions().suppressWarnings);
 						}
+=======
+						break;
+					case Binding.FIELD :
+						FieldBinding sourceField = (FieldBinding) this.recipient;
+						sourceField.tagBits |= tagBits;
+						if ((tagBits & TagBits.AnnotationSuppressWarnings) != 0) {
+							sourceType = (SourceTypeBinding) sourceField.declaringClass;
+							FieldDeclaration fieldDeclaration = sourceType.scope.referenceContext.declarationOf(sourceField);
+							recordSuppressWarnings(scope, fieldDeclaration.declarationSourceStart, fieldDeclaration.declarationSourceEnd, scope.compilerOptions().suppressWarnings);
+						}
+						if ((sourceField.tagBits & TAGBITS_NULLABLE_OR_NONNULL) == TAGBITS_NULLABLE_OR_NONNULL) {
+							scope.problemReporter().contradictoryNullAnnotations(this);
+							sourceField.tagBits &= ~TAGBITS_NULLABLE_OR_NONNULL; // avoid secondary problems
+						}
+						break;
+					case Binding.LOCAL :
+						LocalVariableBinding variable = (LocalVariableBinding) this.recipient;
+						variable.tagBits |= tagBits;
+						if ((tagBits & TagBits.AnnotationSuppressWarnings) != 0) {
+							 LocalDeclaration localDeclaration = variable.declaration;
+							recordSuppressWarnings(scope, localDeclaration.declarationSourceStart, localDeclaration.declarationSourceEnd, scope.compilerOptions().suppressWarnings);
+						}
+>>>>>>> patch
 						if ((variable.tagBits & TAGBITS_NULLABLE_OR_NONNULL) == TAGBITS_NULLABLE_OR_NONNULL) {
 							scope.problemReporter().contradictoryNullAnnotations(this);
 							variable.tagBits &= ~TAGBITS_NULLABLE_OR_NONNULL; // avoid secondary problems
@@ -419,6 +477,9 @@ public abstract class Annotation extends Expression {
 						break;
 				}
 			}
+			// GROOVY start
+			if (scope.compilationUnitScope().checkTargetCompatibility()) {
+			// GROOVY end
 			// check (meta)target compatibility
 			checkTargetCompatibility: {
 				long metaTagBits = annotationType.getAnnotationTagBits(); // could be forward reference
@@ -462,6 +523,9 @@ public abstract class Annotation extends Expression {
 						break;
 				}
 				scope.problemReporter().disallowedTargetForAnnotation(this);
+				// GROOVY start
+				}
+				// GROOVY end
 			}
 		}
 		return this.resolvedType;

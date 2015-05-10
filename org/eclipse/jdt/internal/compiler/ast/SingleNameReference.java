@@ -13,8 +13,10 @@
  *								bug 331649 - [compiler][null] consider null annotations for fields
  *								bug 383368 - [compiler][null] syntactic null analysis for field references
  *								Bug 412203 - [compiler] Internal compiler error: java.lang.IllegalArgumentException: info cannot be null
- *     Jesper S Moller <jesper@selskabet.org> - Contributions for
+ *     Jesper S Moller - <jesper@selskabet.org>   - Contributions for 
+ *     							bug 382721 - [1.8][compiler] Effectively final variables needs special treatment
  *								bug 378674 - "The method can be declared as static" is wrong
+ *								bug 404657 - [1.8][compiler] Analysis for effectively final variables fails to consider loops
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -121,25 +123,36 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 					currentScope.problemReporter().cannotAssignToFinalField(fieldBinding, this);
 				}
 			} else if (!isCompound && fieldBinding.isNonNull()
-						&& fieldBinding.declaringClass == currentScope.enclosingReceiverType()) { // inherited fields are not tracked here
+						&& TypeBinding.equalsEquals(fieldBinding.declaringClass, currentScope.enclosingReceiverType())) { // inherited fields are not tracked here
 				// record assignment for detecting uninitialized non-null fields:
 				flowInfo.markAsDefinitelyAssigned(fieldBinding);
 			}
 			break;
 		case Binding.LOCAL : // assigning to a local variable
 			LocalVariableBinding localBinding = (LocalVariableBinding) this.binding;
+			final boolean isFinal = localBinding.isFinal();
 			if (!flowInfo.isDefinitelyAssigned(localBinding)){// for local variable debug attributes
 				this.bits |= ASTNode.FirstAssignmentToLocal;
 			} else {
 				this.bits &= ~ASTNode.FirstAssignmentToLocal;
 			}
-			if (localBinding.isFinal()) {
+			if (flowInfo.isPotentiallyAssigned(localBinding) || (this.bits & ASTNode.IsCapturedOuterLocal) != 0) {
+				localBinding.tagBits &= ~TagBits.IsEffectivelyFinal;
+				if (!isFinal && (this.bits & ASTNode.IsCapturedOuterLocal) != 0) {
+					currentScope.problemReporter().cannotReferToNonEffectivelyFinalOuterLocal(localBinding, this);
+				}
+			}
+			if (! isFinal && (localBinding.tagBits & TagBits.IsEffectivelyFinal) != 0 && (localBinding.tagBits & TagBits.IsArgument) == 0) {
+				flowContext.recordSettingFinal(localBinding, this, flowInfo);
+			} else if (isFinal) {
 				if ((this.bits & ASTNode.DepthMASK) == 0) {
 					// tolerate assignment to final local in unreachable code (45674)
 					if ((isReachable && isCompound) || !localBinding.isBlankFinal()){
 						currentScope.problemReporter().cannotAssignToFinalLocal(localBinding, this);
 					} else if (flowInfo.isPotentiallyAssigned(localBinding)) {
 						currentScope.problemReporter().duplicateInitializationOfFinalLocal(localBinding, this);
+					} else if ((this.bits & ASTNode.IsCapturedOuterLocal) != 0) {
+						currentScope.problemReporter().cannotAssignToFinalOuterLocal(localBinding, this);
 					} else {
 						flowContext.recordSettingFinal(localBinding, this, flowInfo);
 					}
@@ -206,7 +219,7 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 			SourceTypeBinding sourceType = scope.enclosingSourceType();
 			if (this.constant == Constant.NotAConstant
 					&& !methodScope.isStatic
-					&& (sourceType == declaringClass || sourceType.superclass == declaringClass) // enum constant body
+					&& (TypeBinding.equalsEquals(sourceType, declaringClass) || TypeBinding.equalsEquals(sourceType.superclass, declaringClass)) // enum constant body
 					&& methodScope.isInsideInitializerOrConstructor()) {
 				scope.problemReporter().enumStaticFieldUsedDuringInitialization(fieldBinding, this);
 			}
@@ -219,6 +232,8 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 		if (methodScope.isStatic) {
 			scope.problemReporter().staticFieldAccessToNonStaticVariable(this, fieldBinding);
 			return fieldBinding.type;
+		} else {
+			scope.tagAsAccessingEnclosingInstanceStateOf(fieldBinding.declaringClass, false /* type variable access */);
 		}
 	}
 
@@ -226,7 +241,7 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 		scope.problemReporter().deprecatedField(fieldBinding, this);
 
 	if ((this.bits & ASTNode.IsStrictlyAssigned) == 0
-			&& methodScope.enclosingSourceType() == fieldBinding.original().declaringClass
+			&& TypeBinding.equalsEquals(methodScope.enclosingSourceType(), fieldBinding.original().declaringClass)
 			&& methodScope.lastVisibleFieldID >= 0
 			&& fieldBinding.id >= methodScope.lastVisibleFieldID
 			&& (!fieldBinding.isStatic() || methodScope.isStatic)) {
@@ -239,10 +254,13 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 
 public boolean checkNPE(BlockScope scope, FlowContext flowContext, FlowInfo flowInfo) {
 	if (!super.checkNPE(scope, flowContext, flowInfo)) {
-		VariableBinding var = nullAnnotatedVariableBinding();
-		if (var instanceof FieldBinding) {
-			checkNullableFieldDereference(scope, (FieldBinding) var, ((long)this.sourceStart<<32)+this.sourceEnd);
-			return true;
+		CompilerOptions compilerOptions = scope.compilerOptions();
+		if (compilerOptions.isAnnotationBasedNullAnalysisEnabled) {
+			VariableBinding var = nullAnnotatedVariableBinding(compilerOptions.sourceLevel >= ClassFileConstants.JDK1_8);
+			if (var instanceof FieldBinding) {
+				checkNullableFieldDereference(scope, (FieldBinding) var, ((long)this.sourceStart<<32)+this.sourceEnd);
+				return true;
+			}
 		}
 	}
 	return false;
@@ -402,7 +420,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 				if (codegenField.isStatic()) {
 					if (!valueRequired
 							// if no valueRequired, still need possible side-effects of <clinit> invocation, if field belongs to different class
-							&& ((FieldBinding)this.binding).original().declaringClass == this.actualReceiverType.erasure()
+							&& TypeBinding.equalsEquals(((FieldBinding)this.binding).original().declaringClass, this.actualReceiverType.erasure())
 							&& ((this.implicitConversion & TypeIds.UNBOXING) == 0)
 							&& this.genericCast == null) {
 						// if no valueRequired, optimize out entire gen
@@ -458,7 +476,8 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 					return;
 				}
 				// outer local?
-				if ((this.bits & ASTNode.DepthMASK) != 0) {
+				if ((this.bits & ASTNode.IsCapturedOuterLocal) != 0) {
+					checkEffectiveFinality(localBinding, currentScope);
 					// outer local can be reached either through a synthetic arg or a synthetic field
 					VariableBinding[] path = currentScope.getEmulationPath(localBinding);
 					codeStream.generateOuterAccess(path, this, localBinding, currentScope);
@@ -759,7 +778,7 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 			}
 
 			// using incr bytecode if possible
-			if (localBinding.type == TypeBinding.INT) {
+			if (TypeBinding.equalsEquals(localBinding.type, TypeBinding.INT)) {
 				if (valueRequired) {
 					codeStream.load(localBinding);
 				}
@@ -828,19 +847,28 @@ public LocalVariableBinding localVariableBinding() {
 	return null;
 }
 
-public VariableBinding nullAnnotatedVariableBinding() {
+public VariableBinding nullAnnotatedVariableBinding(boolean supportTypeAnnotations) {
 	switch (this.bits & ASTNode.RestrictiveFlagMASK) {
 		case Binding.FIELD : // reading a field
 		case Binding.LOCAL : // reading a local variable
-			if ((((VariableBinding)this.binding).tagBits & (TagBits.AnnotationNonNull|TagBits.AnnotationNullable)) != 0)
+			if (supportTypeAnnotations 
+					|| (((VariableBinding)this.binding).tagBits & TagBits.AnnotationNullMASK) != 0)
 				return (VariableBinding) this.binding;
 	}
 	return null;
 }
 
+public int nullStatus(FlowInfo flowInfo, FlowContext flowContext) {
+	LocalVariableBinding local = localVariableBinding();
+	if (local != null) {
+		return flowInfo.nullStatus(local);
+	}
+	return super.nullStatus(flowInfo, flowContext);
+}
+
 public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 	//If inlinable field, forget the access emulation, the code gen will directly target it
-	if (((this.bits & ASTNode.DepthMASK) == 0) || (this.constant != Constant.NotAConstant)) {
+	if (((this.bits & ASTNode.DepthMASK) == 0 && (this.bits & ASTNode.IsCapturedOuterLocal) == 0) || (this.constant != Constant.NotAConstant)) {
 		return;
 	}
 	if ((this.bits & ASTNode.RestrictiveFlagMASK) == Binding.LOCAL) {
@@ -960,8 +988,9 @@ public TypeBinding resolveType(BlockScope scope) {
 					if (this.binding instanceof LocalVariableBinding) {
 						this.bits &= ~ASTNode.RestrictiveFlagMASK;  // clear bits
 						this.bits |= Binding.LOCAL;
-						if (!variable.isFinal() && (this.bits & ASTNode.DepthMASK) != 0) {
-							scope.problemReporter().cannotReferToNonFinalOuterLocal((LocalVariableBinding)variable, this);
+						if (!variable.isFinal() && (this.bits & ASTNode.IsCapturedOuterLocal) != 0) {
+							if (scope.compilerOptions().sourceLevel < ClassFileConstants.JDK1_8) // for 8, defer till effective finality could be ascertained.
+								scope.problemReporter().cannotReferToNonFinalOuterLocal((LocalVariableBinding)variable, this);
 						}
 						variableType = variable.type;
 						this.constant = (this.bits & ASTNode.IsStrictlyAssigned) == 0 ? variable.constant() : Constant.NotAConstant;
@@ -1015,5 +1044,9 @@ public void traverse(ASTVisitor visitor, ClassScope scope) {
 
 public String unboundReferenceErrorName(){
 	return new String(this.token);
+}
+
+public char[][] getName() {
+	return new char[][] {this.token};
 }
 }

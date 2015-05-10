@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,13 +16,6 @@
  *							bug 358903 - Filter practically unimportant resource leak warnings
  *							bug 370639 - [compiler][resource] restore the default for resource leak warnings
  *							bug 365859 - [compiler][null] distinguish warnings based on flow analysis vs. null annotations
- *							bug 388996 - [compiler][resource] Incorrect 'potential resource leak'
- *							bug 394768 - [compiler][resource] Incorrect resource leak warning when creating stream in conditional
- *							bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
- *							bug 383368 - [compiler][null] syntactic null analysis for field references
- *							bug 400761 - [compiler][null] null may be return as boolean without a diagnostic
- *     Jesper S Moller - Contributions for
- *							Bug 378674 - "The method can be declared as static" is wrong
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -53,10 +46,48 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	if ((flowInfo.tagBits & FlowInfo.UNREACHABLE_OR_DEAD) == 0) {
 		this.bits |= ASTNode.IsLocalDeclarationReachable; // only set if actually reached
 	}
+	if (this.binding != null && this.type.resolvedType instanceof TypeVariableBinding) {
+		TypeVariableBinding typeVariableBinding = (TypeVariableBinding) this.type.resolvedType;
+		MethodScope methodScope= this.binding.declaringScope.methodScope();
+		if (methodScope != null && methodScope.referenceContext instanceof TypeDeclaration) {
+			// initialization scope
+			methodScope = methodScope.enclosingMethodScope();
+		}
+		AbstractMethodDeclaration methodDeclaration = (methodScope != null) ? methodScope.referenceMethod() : null;
+		if (methodDeclaration != null && methodDeclaration.binding != null) {
+			TypeVariableBinding[] typeVariables = methodDeclaration.binding.typeVariables();
+			if (typeVariables == null) typeVariables = Binding.NO_TYPE_VARIABLES;
+			if (typeVariables == Binding.NO_TYPE_VARIABLES) {
+				// Method declares no type variables.
+				if (typeVariableBinding != null && typeVariableBinding.declaringElement instanceof TypeBinding)
+					currentScope.resetDeclaringClassMethodStaticFlag((TypeBinding) typeVariableBinding.declaringElement);
+				else
+					currentScope.resetEnclosingMethodStaticFlag();
+			} else {
+				// to check whether the resolved type for this is declared by enclosing method as a type variable
+				boolean usesEnclosingTypeVar = false; 
+				for (int i = 0; i < typeVariables.length ; i ++) {
+					if (typeVariables[i] == this.type.resolvedType){
+						usesEnclosingTypeVar = true;
+						break;
+					}
+				}
+				if (!usesEnclosingTypeVar) {
+					// uses a type variable not declared by enclosing method
+					if (typeVariableBinding != null && typeVariableBinding.declaringElement instanceof TypeBinding)
+						currentScope.resetDeclaringClassMethodStaticFlag((TypeBinding) typeVariableBinding.declaringElement);
+					else
+						currentScope.resetEnclosingMethodStaticFlag();
+				}
+			}
+		}
+	}
 	if (this.initialization == null) {
 		return flowInfo;
 	}
-	this.initialization.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
+	if ((this.initialization.implicitConversion & TypeIds.UNBOXING) != 0) {
+		this.initialization.checkNPE(currentScope, flowContext, flowInfo);
+	}
 	
 	FlowInfo preInitInfo = null;
 	boolean shouldAnalyseResource = this.binding != null 
@@ -66,7 +97,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	if (shouldAnalyseResource) {
 		preInitInfo = flowInfo.unconditionalCopy();
 		// analysis of resource leaks needs additional context while analyzing the RHS:
-		FakedTrackingVariable.preConnectTrackerAcrossAssignment(this, this.binding, this.initialization, flowInfo);
+		FakedTrackingVariable.preConnectTrackerAcrossAssignment(this, this.binding, this.initialization);
 	}
 
 	flowInfo =
@@ -75,11 +106,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			.unconditionalInits();
 
 	if (shouldAnalyseResource)
-		FakedTrackingVariable.handleResourceAssignment(currentScope, preInitInfo, flowInfo, flowContext, this, this.initialization, this.binding);
+		FakedTrackingVariable.handleResourceAssignment(currentScope, preInitInfo, flowInfo, this, this.initialization, this.binding);
 	else
 		FakedTrackingVariable.cleanUpAfterAssignment(currentScope, Binding.LOCAL, this.initialization);
 
-	int nullStatus = this.initialization.nullStatus(flowInfo, flowContext);
+	int nullStatus = this.initialization.nullStatus(flowInfo);
 	if (!flowInfo.isDefinitelyAssigned(this.binding)){// for local variable debug attributes
 		this.bits |= FirstAssignmentToLocal;
 	} else {
@@ -214,7 +245,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 					if (variableType != initializationType) // must call before computeConversion() and typeMismatchError()
 						scope.compilationUnitScope().recordTypeConversion(variableType, initializationType);
 					if (this.initialization.isConstantValueOfTypeAssignableToType(initializationType, variableType)
-						|| initializationType.isCompatibleWith(variableType, scope)) {
+						|| initializationType.isCompatibleWith(variableType)) {
 						this.initialization.computeConversion(scope, variableType, initializationType);
 						if (initializationType.needsUncheckedConversion(variableType)) {
 						    scope.problemReporter().unsafeTypeConversion(this.initialization, initializationType, variableType);

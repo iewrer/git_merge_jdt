@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  *  Copyright (c) 2005, 2013 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
@@ -9,6 +10,19 @@
  *     Ben Konrath <ben@bagu.org> - initial implementation
  *     Red Hat Incorporated - improvements based on comments from JDT developers
  *     IBM Corporation - Code review and integration
+=======
+/*******************************************************************************
+ *  Copyright (c) 2005, 2011 IBM Corporation and others.
+ *  All rights reserved. This program and the accompanying materials
+ *  are made available under the terms of the Eclipse Public License v1.0
+ *  which accompanies this distribution, and is available at
+ *  http://www.eclipse.org/legal/epl-v10.html
+ * 
+ *  Contributors:
+ *     Ben Konrath <ben@bagu.org> - initial implementation
+ *     Red Hat Incorporated - improvements based on comments from JDT developers
+ *     IBM Corporation - Code review and integration
+>>>>>>> patch
  *     IBM Corporation - Fix for 340181
  *******************************************************************************/
 package org.eclipse.jdt.core.formatter;
@@ -36,7 +50,7 @@ import org.eclipse.text.edits.TextEdit;
 
 /**
  * Implements an Eclipse Application for org.eclipse.jdt.core.JavaCodeFormatter.
- * 
+ *
  * <p>On MacOS, when invoked using the Eclipse executable, the "user.dir" property is set to the folder
  * in which the eclipse.ini file is located. This makes it harder to use relative paths to point to the 
  * files to be formatted or the configuration file to use to set the code formatter's options.</p>
@@ -44,6 +58,7 @@ import org.eclipse.text.edits.TextEdit;
  * <p>There are a couple improvements that could be made: 1. Make a list of all the
  * files first so that a file does not get formatted twice. 2. Use a text based
  * progress monitor for output.</p>
+<<<<<<< HEAD
  *
  * @author Ben Konrath <bkonrath@redhat.com>
  * @since 3.2
@@ -66,6 +81,29 @@ public class CodeFormatterApplication implements IApplication {
 
 		public static String CommandLineErrorConfig;
 
+=======
+ *
+ * @author Ben Konrath <bkonrath@redhat.com>
+ * @since 3.2
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ * @noextend This class is not intended to be subclassed by clients.
+ */
+public class CodeFormatterApplication implements IApplication {
+
+	/**
+	 * Deals with the messages in the properties file (cut n' pasted from a
+	 * generated class).
+	 */
+	private final static class Messages extends NLS {
+		private static final String BUNDLE_NAME = "org.eclipse.jdt.core.formatter.messages";//$NON-NLS-1$
+
+		public static String CommandLineConfigFile;
+
+		public static String CommandLineDone;
+
+		public static String CommandLineErrorConfig;
+
+>>>>>>> patch
 		public static String CommandLineErrorFileTryFullPath;
 
 		public static String CommandLineErrorFile;

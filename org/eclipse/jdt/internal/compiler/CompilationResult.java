@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -40,6 +41,50 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler;
+
+/**
+ * A compilation result consists of all information returned by the compiler for
+ * a single compiled compilation source unit.  This includes:
+ * <ul>
+ * <li> the compilation unit that was compiled
+ * <li> for each type produced by compiling the compilation unit, its binary and optionally its principal structure
+ * <li> any problems (errors or warnings) produced
+ * <li> dependency info
+ * </ul>
+ *
+ * The principle structure and binary may be null if the compiler could not produce them.
+ * If neither could be produced, there is no corresponding entry for the type.
+ *
+ * The dependency info includes type references such as supertypes, field types, method
+ * parameter and return types, local variable types, types of intermediate expressions, etc.
+ * It also includes the namespaces (packages) in which names were looked up.
+ * It does <em>not</em> include finer grained dependencies such as information about
+ * specific fields and methods which were referenced, but does contain their
+ * declaring types and any other types used to locate such fields or methods.
+ */
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import org.eclipse.jdt.core.compiler.CategorizedProblem;
+>>>>>>> patch
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
@@ -47,6 +92,7 @@ import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+<<<<<<< HEAD
 import org.eclipse.jdt.internal.compiler.parser.RecoveryScannerData;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
@@ -76,6 +122,35 @@ public class CompilationResult {
 	public boolean hasSyntaxError = false;
 	public char[][] packageName;
 	public boolean checkSecondaryTypes = false; // check for secondary types which were created after the initial buildTypeBindings call
+=======
+import org.eclipse.jdt.internal.compiler.parser.RecoveryScannerData;
+import org.eclipse.jdt.internal.compiler.util.Util;
+
+public class CompilationResult {
+
+	public CategorizedProblem problems[];
+	public CategorizedProblem tasks[];
+	public int problemCount;
+	public int taskCount;
+	public ICompilationUnit compilationUnit;
+	private Map problemsMap;
+	private Set firstErrors;
+	private int maxProblemPerUnit;
+	public char[][][] qualifiedReferences;
+	public char[][] simpleNameReferences;
+	public char[][] rootReferences;
+	public boolean hasAnnotations = false;
+	public int lineSeparatorPositions[];
+	public RecoveryScannerData recoveryScannerData;
+	public Map compiledTypes = new Hashtable(11);
+	public int unitIndex, totalUnitsKnown;
+	public boolean hasBeenAccepted = false;
+	public char[] fileName;
+	public boolean hasInconsistentToplevelHierarchies = false; // record the fact some toplevel types have inconsistent hierarchies
+	public boolean hasSyntaxError = false;
+	public char[][] packageName;
+	public boolean checkSecondaryTypes = false; // check for secondary types which were created after the initial buildTypeBindings call
+>>>>>>> patch
 	private int numberOfErrors;
 	private boolean hasMandatoryErrors;
 
@@ -312,7 +387,7 @@ public CategorizedProblem[] getTasks() {
 
 public boolean hasErrors() {
 	return this.numberOfErrors != 0;
-}
+		}
 
 public boolean hasMandatoryErrors() {
 	return this.hasMandatoryErrors;
@@ -394,8 +469,8 @@ public void record(CategorizedProblem newProblem, ReferenceContext referenceCont
 		this.numberOfErrors++;
 		if (mandatoryError) this.hasMandatoryErrors = true;
 		if ((newProblem.getID() & IProblem.Syntax) != 0) {
-			this.hasSyntaxError = true;
-		}
+		this.hasSyntaxError = true;
+}
 	}
 }
 

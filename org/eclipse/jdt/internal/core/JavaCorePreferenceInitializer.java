@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -30,6 +31,39 @@ public class JavaCorePreferenceInitializer extends AbstractPreferenceInitializer
 	 */
 	public void initializeDefaultPreferences() {
 		// If modified, also modify the method JavaModelManager#getDefaultOptionsNoInitialization()
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core;
+// GROOVY PATCHED
+import java.util.*;
+
+import org.eclipse.core.runtime.preferences.*;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+
+/**
+ * JavaCore eclipse preferences initializer.
+ * Initially done in JavaCore.initializeDefaultPreferences which was deprecated
+ * with new eclipse preferences mechanism.
+ */
+public class JavaCorePreferenceInitializer extends AbstractPreferenceInitializer {
+
+	/**
+	 * @see org.eclipse.core.runtime.preferences.AbstractPreferenceInitializer#initializeDefaultPreferences()
+	 */
+	public void initializeDefaultPreferences() {
+		// If modified, also modify the method JavaModelManager#getDefaultOptionsNoInitialization()
+>>>>>>> patch
 		// and also consider updating org.eclipse.jdt.internal.compiler.batch.Main#initializeWarnings(String)
 		// Get options names set
 		HashSet optionNames = JavaModelManager.getJavaModelManager().optionNames;
@@ -104,6 +138,21 @@ public class JavaCorePreferenceInitializer extends AbstractPreferenceInitializer
 			defaultPreferences.put(optionName, (String)entry.getValue());
 			optionNames.add(optionName);
 		}
+		
+		// GROOVY start
+		// add groovy-specific options
+		optionNames.add(CompilerOptions.OPTIONG_GroovyExtraImports);
+		optionNames.add(CompilerOptions.OPTIONG_GroovyTransformsToRunOnReconcile);
+		optionNames.add(CompilerOptions.OPTIONG_GroovyClassLoaderPath);
+
+		// these three may not be necessary
+		optionNames.add(CompilerOptions.OPTIONG_GroovyFlags);
+		optionNames.add(CompilerOptions.OPTIONG_BuildGroovyFiles);
+		optionNames.add(CompilerOptions.OPTIONG_GroovyProjectName);
+		
+
+		optionNames.add(CompilerOptions.OPTIONG_GroovyCustomizerClassesList);
+		// GROOVY end
 
 		// Initialize deprecated options
 		initializeDeprecatedOptions();

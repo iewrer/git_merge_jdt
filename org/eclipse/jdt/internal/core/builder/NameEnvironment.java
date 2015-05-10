@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -7,11 +8,23 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+>>>>>>> patch
  *     Terry Parker <tparker@google.com> 
  *           - Contribution for https://bugs.eclipse.org/bugs/show_bug.cgi?id=372418
  *           -  Another problem with inner classes referenced from jars or class folders: "The type ... cannot be resolved"
  *     Stephan Herrmann - Contribution for
  *								Bug 392727 - Cannot compile project when a java file contains $ in its file name
+<<<<<<< HEAD
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.builder;
 
@@ -120,6 +133,115 @@ private void computeClasspathLocations(
 						createOutputFolder(outputFolder);
 				}
 				sLocations.add(
+=======
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.builder;
+// GROOVY PATCHED
+import org.eclipse.core.resources.*;
+import org.eclipse.core.runtime.*;
+
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.env.*;
+import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
+import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
+import org.eclipse.jdt.internal.compiler.util.SimpleSet;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.*;
+
+import java.io.*;
+import java.util.*;
+
+public class NameEnvironment implements INameEnvironment, SuffixConstants {
+
+boolean isIncrementalBuild;
+ClasspathMultiDirectory[] sourceLocations;
+ClasspathLocation[] binaryLocations;
+BuildNotifier notifier;
+
+SimpleSet initialTypeNames; // assumed that each name is of the form "a/b/ClassName"
+SimpleLookupTable additionalUnits;
+
+NameEnvironment(IWorkspaceRoot root, JavaProject javaProject, SimpleLookupTable binaryLocationsPerProject, BuildNotifier notifier) throws CoreException {
+	this.isIncrementalBuild = false;
+	this.notifier = notifier;
+	computeClasspathLocations(root, javaProject, binaryLocationsPerProject);
+	setNames(null, null);
+}
+
+public NameEnvironment(IJavaProject javaProject) {
+	this.isIncrementalBuild = false;
+	try {
+		computeClasspathLocations(javaProject.getProject().getWorkspace().getRoot(), (JavaProject) javaProject, null);
+	} catch(CoreException e) {
+		this.sourceLocations = new ClasspathMultiDirectory[0];
+		this.binaryLocations = new ClasspathLocation[0];
+	}
+	setNames(null, null);
+}
+
+/* Some examples of resolved class path entries.
+* Remember to search class path in the order that it was defined.
+*
+* 1a. typical project with no source folders:
+*   /Test[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test
+* 1b. project with source folders:
+*   /Test/src1[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test/src1
+*   /Test/src2[CPE_SOURCE][K_SOURCE] -> D:/eclipse.test/Test/src2
+*  NOTE: These can be in any order & separated by prereq projects or libraries
+* 1c. project external to workspace (only detectable using getLocation()):
+*   /Test/src[CPE_SOURCE][K_SOURCE] -> d:/eclipse.zzz/src
+*  Need to search source folder & output folder
+*
+* 2. zip files:
+*   D:/j9/lib/jclMax/classes.zip[CPE_LIBRARY][K_BINARY][sourcePath:d:/j9/lib/jclMax/source/source.zip]
+*      -> D:/j9/lib/jclMax/classes.zip
+*  ALWAYS want to take the library path as is
+*
+* 3a. prereq project (regardless of whether it has a source or output folder):
+*   /Test[CPE_PROJECT][K_SOURCE] -> D:/eclipse.test/Test
+*  ALWAYS want to append the output folder & ONLY search for .class files
+*/
+private void computeClasspathLocations(
+	IWorkspaceRoot root,
+	JavaProject javaProject,
+	SimpleLookupTable binaryLocationsPerProject) throws CoreException {
+
+	/* Update cycle marker */
+	IMarker cycleMarker = javaProject.getCycleMarker();
+	if (cycleMarker != null) {
+		int severity = JavaCore.ERROR.equals(javaProject.getOption(JavaCore.CORE_CIRCULAR_CLASSPATH, true))
+			? IMarker.SEVERITY_ERROR
+			: IMarker.SEVERITY_WARNING;
+		if (severity != cycleMarker.getAttribute(IMarker.SEVERITY, severity))
+			cycleMarker.setAttribute(IMarker.SEVERITY, severity);
+	}
+
+	IClasspathEntry[] classpathEntries = javaProject.getExpandedClasspath();
+	ArrayList sLocations = new ArrayList(classpathEntries.length);
+	ArrayList bLocations = new ArrayList(classpathEntries.length);
+	nextEntry : for (int i = 0, l = classpathEntries.length; i < l; i++) {
+		ClasspathEntry entry = (ClasspathEntry) classpathEntries[i];
+		IPath path = entry.getPath();
+		Object target = JavaModel.getTarget(path, true);
+		if (target == null) continue nextEntry;
+
+		switch(entry.getEntryKind()) {
+			case IClasspathEntry.CPE_SOURCE :
+				if (!(target instanceof IContainer)) continue nextEntry;
+				IPath outputPath = entry.getOutputLocation() != null
+					? entry.getOutputLocation()
+					: javaProject.getOutputLocation();
+				IContainer outputFolder;
+				if (outputPath.segmentCount() == 1) {
+					outputFolder = javaProject.getProject();
+				} else {
+					outputFolder = root.getFolder(outputPath);
+					if (!outputFolder.exists())
+						createOutputFolder(outputFolder);
+				}
+				sLocations.add(
+>>>>>>> patch
 					ClasspathLocation.forSourceFolder((IContainer) target, outputFolder, entry.fullInclusionPatternChars(), entry.fullExclusionPatternChars(), entry.ignoreOptionalProblems()));
 				continue nextEntry;
 
@@ -262,6 +384,11 @@ private void createParentFolder(IContainer parent) throws CoreException {
 	}
 }
 
+//GROOVY GRECLIPSE-1594
+public boolean avoidAdditionalGroovyAnswers = false;
+private static char[] groovySuffixAsChars = ".groovy".toCharArray(); //$NON-NLS-1$
+//GRECLIPSE end
+
 private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeName) {
 	if (this.notifier != null)
 		this.notifier.checkCancelWithinCompiler();
@@ -282,12 +409,26 @@ private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeNam
 		// Also take care of $ in the name of the class (https://bugs.eclipse.org/377401)
 		// and prefer name with '$' if unit exists rather than failing to search for nested class (https://bugs.eclipse.org/392727)
 		SourceFile unit = (SourceFile) this.additionalUnits.get(qualifiedTypeName); // doesn't have file extension
+		// GROOVY patch
+		if (this.avoidAdditionalGroovyAnswers && unit!=null) {
+			if (CharOperation.endsWith(unit.getFileName(),groovySuffixAsChars)) {
+				unit = null;
+			}
+		}
+		// GROOVY end
 		if (unit != null)
 			return new NameEnvironmentAnswer(unit, null /*no access restriction*/);
 		int index = qualifiedTypeName.indexOf('$');
 		if (index > 0) {
 			String enclosingTypeName = qualifiedTypeName.substring(0, index);
 			unit = (SourceFile) this.additionalUnits.get(enclosingTypeName); // doesn't have file extension
+			// GROOVY start
+			if (this.avoidAdditionalGroovyAnswers && unit!=null) {
+				if (CharOperation.endsWith(unit.getFileName(),groovySuffixAsChars)) {
+					unit = null;
+				}
+			}
+			// GROOVY end
 			if (unit != null)
 				return new NameEnvironmentAnswer(unit, null /*no access restriction*/);
 		}

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -74,6 +75,83 @@ class PackageBinding implements IPackageBinding {
 						String unitName = "package-info.java"; //$NON-NLS-1$
 						ICompilationUnit unit = pkgs[i].getCompilationUnit(unitName);
 						if (unit != null && unit.exists()) {
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+
+package org.eclipse.jdt.core.dom;
+
+import java.util.Iterator;
+import java.util.List;
+
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IPackageFragment;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.env.IBinaryAnnotation;
+import org.eclipse.jdt.internal.compiler.env.IBinaryType;
+import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
+import org.eclipse.jdt.internal.compiler.env.NameEnvironmentAnswer;
+import org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jdt.internal.core.NameLookup;
+import org.eclipse.jdt.internal.core.SearchableEnvironment;
+
+/**
+ * Internal implementation of package bindings.
+ */
+class PackageBinding implements IPackageBinding {
+
+	private static final String[] NO_NAME_COMPONENTS = CharOperation.NO_STRINGS;
+	private static final String UNNAMED = Util.EMPTY_STRING;
+	private static final char PACKAGE_NAME_SEPARATOR = '.';
+
+	private org.eclipse.jdt.internal.compiler.lookup.PackageBinding binding;
+	private String name;
+	private BindingResolver resolver;
+	private String[] components;
+
+	PackageBinding(org.eclipse.jdt.internal.compiler.lookup.PackageBinding binding, BindingResolver resolver) {
+		this.binding = binding;
+		this.resolver = resolver;
+	}
+
+	public IAnnotationBinding[] getAnnotations() {
+		try {
+			INameEnvironment nameEnvironment = this.binding.environment.nameEnvironment;
+			if (!(nameEnvironment instanceof SearchableEnvironment))
+				return AnnotationBinding.NoAnnotations;
+			NameLookup nameLookup = ((SearchableEnvironment) nameEnvironment).nameLookup;
+			if (nameLookup == null)
+				return AnnotationBinding.NoAnnotations;
+			final String pkgName = getName();
+			IPackageFragment[] pkgs = nameLookup.findPackageFragments(pkgName, false/*exact match*/);
+			if (pkgs == null)
+				return AnnotationBinding.NoAnnotations;
+
+			for (int i = 0, len = pkgs.length; i < len; i++) {
+				int fragType = pkgs[i].getKind();
+				switch(fragType) {
+					case IPackageFragmentRoot.K_SOURCE:
+						String unitName = "package-info.java"; //$NON-NLS-1$
+						ICompilationUnit unit = pkgs[i].getCompilationUnit(unitName);
+						if (unit != null && unit.exists()) {
+>>>>>>> patch
 							ASTParser p = ASTParser.newParser(AST.JLS3_INTERNAL);
 							p.setSource(unit);
 							p.setResolveBindings(true);

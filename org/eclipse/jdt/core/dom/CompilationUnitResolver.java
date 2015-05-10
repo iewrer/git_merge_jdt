@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -7,9 +8,21 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+>>>>>>> patch
  *     Stephan Herrmann - Contribution for bug 363858 - [dom] early throwing of AbortCompilation causes NPE in CompilationUnitResolver
  *******************************************************************************/
 package org.eclipse.jdt.core.dom;
+// GROOVY PATCHED
 
 import java.io.File;
 import java.io.IOException;
@@ -19,6 +32,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.jdt.core.ICompilationUnit;
@@ -28,6 +42,7 @@ import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.WorkingCopyOwner;
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.util.CompilerUtils;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
@@ -57,6 +72,7 @@ import org.eclipse.jdt.internal.core.BinaryMember;
 import org.eclipse.jdt.internal.core.CancelableNameEnvironment;
 import org.eclipse.jdt.internal.core.CancelableProblemFactory;
 import org.eclipse.jdt.internal.core.INameEnvironmentWithProgress;
+<<<<<<< HEAD
 import org.eclipse.jdt.internal.core.JavaProject;
 import org.eclipse.jdt.internal.core.NameLookup;
 import org.eclipse.jdt.internal.core.SourceRefElement;
@@ -101,6 +117,54 @@ class CompilationUnitResolver extends Compiler {
 	DefaultBindingResolver.BindingTables bindingTables;
 
 	boolean hasCompilationAborted;
+=======
+import org.eclipse.jdt.internal.core.JavaProject;
+import org.eclipse.jdt.internal.core.NameLookup;
+import org.eclipse.jdt.internal.core.SourceRefElement;
+import org.eclipse.jdt.internal.core.SourceTypeElementInfo;
+import org.eclipse.jdt.internal.core.util.BindingKeyResolver;
+import org.eclipse.jdt.internal.core.util.CommentRecorderParser;
+import org.eclipse.jdt.internal.core.util.DOMFinder;
+
+//GROOVY Should we do this??? No!
+public
+//GROOVY
+class CompilationUnitResolver extends Compiler {
+	public static final int RESOLVE_BINDING = 0x1;
+	public static final int PARTIAL = 0x2;
+	public static final int STATEMENT_RECOVERY = 0x4;
+	public static final int IGNORE_METHOD_BODIES = 0x8;
+	public static final int BINDING_RECOVERY = 0x10;
+	public static final int INCLUDE_RUNNING_VM_BOOTCLASSPATH = 0x20;
+
+	/* A list of int */
+	static class IntArrayList {
+		public int[] list = new int[5];
+		public int length = 0;
+		public void add(int i) {
+			if (this.list.length == this.length) {
+				System.arraycopy(this.list, 0, this.list = new int[this.length*2], 0, this.length);
+			}
+				this.list[this.length++] = i;
+			}
+		}
+
+	/*
+	 * The sources that were requested.
+	 * Map from file name (char[]) to org.eclipse.jdt.internal.compiler.env.ICompilationUnit.
+	 */
+	HashtableOfObject requestedSources;
+
+	/*
+	 * The binding keys that were requested.
+	 * Map from file name (char[]) to BindingKey (or ArrayList if multiple keys in the same file).
+	 */
+	HashtableOfObject requestedKeys;
+
+	DefaultBindingResolver.BindingTables bindingTables;
+
+	boolean hasCompilationAborted;
+>>>>>>> patch
 	CategorizedProblem abortProblem;
 
 	private IProgressMonitor monitor;
@@ -303,6 +367,7 @@ class CompilationUnitResolver extends Compiler {
 		compilerOptions.parseLiteralExpressionsAsConstants = false;
 		compilerOptions.storeAnnotations = true /*store annotations in the bindings*/;
 		compilerOptions.ignoreSourceFolderWarningOption = true;
+<<<<<<< HEAD
 		return compilerOptions;
 	}
 	/*
@@ -371,6 +436,78 @@ class CompilationUnitResolver extends Compiler {
 			removeUnresolvedBindings(unit);
 		}
 		this.hasCompilationAborted = true;
+=======
+		return compilerOptions;
+	}
+	/*
+	 *  Low-level API performing the actual compilation
+	 */
+	protected static IErrorHandlingPolicy getHandlingPolicy() {
+
+		// passes the initial set of files to the batch oracle (to avoid finding more than once the same units when case insensitive match)
+		return new IErrorHandlingPolicy() {
+			public boolean stopOnFirstError() {
+				return false;
+			}
+			public boolean proceedOnErrors() {
+				return false; // stop if there are some errors
+			}
+		};
+	}
+
+	/*
+	 * Answer the component to which will be handed back compilation results from the compiler
+	 */
+	protected static ICompilerRequestor getRequestor() {
+		return new ICompilerRequestor() {
+			public void acceptResult(CompilationResult compilationResult) {
+				// do nothing
+			}
+		};
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.internal.compiler.Compiler#initializeParser()
+	 */
+	public void initializeParser() {
+		// GROOVY start
+		/* old {
+		this.parser = new CommentRecorderParser(this.problemReporter, false);
+		} new */
+		this.parser = LanguageSupportFactory.getParser(this, this.lookupEnvironment==null?null:this.lookupEnvironment.globalOptions,this.problemReporter, false, LanguageSupportFactory.CommentRecorderParserVariant);
+		// GROOVY end
+	}
+	public void process(CompilationUnitDeclaration unit, int i) {
+		// don't resolve a second time the same unit (this would create the same binding twice)
+		char[] fileName = unit.compilationResult.getFileName();
+		if (this.requestedKeys.get(fileName) == null && this.requestedSources.get(fileName) == null)
+			super.process(unit, i);
+	}
+	/*
+	 * Compiler crash recovery in case of unexpected runtime exceptions
+	 */
+	protected void handleInternalException(
+			Throwable internalException,
+			CompilationUnitDeclaration unit,
+			CompilationResult result) {
+		super.handleInternalException(internalException, unit, result);
+		if (unit != null) {
+			removeUnresolvedBindings(unit);
+		}
+	}
+
+	/*
+	 * Compiler recovery in case of internal AbortCompilation event
+	 */
+	protected void handleInternalException(
+			AbortCompilation abortException,
+			CompilationUnitDeclaration unit) {
+		super.handleInternalException(abortException, unit);
+		if (unit != null) {
+			removeUnresolvedBindings(unit);
+		}
+		this.hasCompilationAborted = true;
+>>>>>>> patch
 		this.abortProblem = abortException.problem;
 	}
 
@@ -497,12 +634,22 @@ class CompilationUnitResolver extends Compiler {
 		compilerOptions.performMethodsFullRecovery = statementsRecovery;
 		compilerOptions.performStatementsRecovery = statementsRecovery;
 		compilerOptions.ignoreMethodBodies = (flags & ICompilationUnit.IGNORE_METHOD_BODIES) != 0;
+		// GROOVY Start
+		/* old {
 		Parser parser = new CommentRecorderParser(
 			new ProblemReporter(
 					DefaultErrorHandlingPolicies.proceedWithAllProblems(),
 					compilerOptions,
 					new DefaultProblemFactory()),
 			false);
+		} new */
+		Parser parser = LanguageSupportFactory.getParser(null, 
+				compilerOptions, new ProblemReporter(
+						DefaultErrorHandlingPolicies.proceedWithAllProblems(),
+						compilerOptions,
+						new DefaultProblemFactory()),
+						false, 2 /* comment recorder parser */);
+		// GROOVY End
 		CompilationResult compilationResult = new CompilationResult(sourceUnit, 0, 0, compilerOptions.maxProblemsPerUnit);
 		CompilationUnitDeclaration compilationUnitDeclaration = parser.dietParse(sourceUnit, compilationResult);
 
@@ -573,6 +720,9 @@ class CompilationUnitResolver extends Compiler {
 			problemFactory = new CancelableProblemFactory(monitor);
 			CompilerOptions compilerOptions = getCompilerOptions(options, (flags & ICompilationUnit.ENABLE_STATEMENTS_RECOVERY) != 0);
 			compilerOptions.ignoreMethodBodies = (flags & ICompilationUnit.IGNORE_METHOD_BODIES) != 0;
+			// GROOVY start
+			CompilerUtils.configureOptionsBasedOnNature(compilerOptions, javaProject);
+			// GROOVY end
 			CompilationUnitResolver resolver =
 				new CompilationUnitResolver(
 					environment,
@@ -675,6 +825,9 @@ class CompilationUnitResolver extends Compiler {
 			CompilerOptions compilerOptions = getCompilerOptions(options, (flags & ICompilationUnit.ENABLE_STATEMENTS_RECOVERY) != 0);
 			boolean ignoreMethodBodies = (flags & ICompilationUnit.IGNORE_METHOD_BODIES) != 0;
 			compilerOptions.ignoreMethodBodies = ignoreMethodBodies;
+			// GROOVY start	
+			CompilerUtils.configureOptionsBasedOnNature(compilerOptions, javaProject); 
+			// GROOVY end
 			resolver =
 				new CompilationUnitResolver(
 					environment,
@@ -698,12 +851,12 @@ class CompilationUnitResolver extends Compiler {
 				// see https://bugs.eclipse.org/bugs/show_bug.cgi?id=86541
 				CompilationUnitDeclaration unitDeclaration = parse(sourceUnit, nodeSearcher, options, flags);
 				if (unit != null) {
-					final int problemCount = unit.compilationResult.problemCount;
-					if (problemCount != 0) {
-						unitDeclaration.compilationResult.problems = new CategorizedProblem[problemCount];
-						System.arraycopy(unit.compilationResult.problems, 0, unitDeclaration.compilationResult.problems, 0, problemCount);
-						unitDeclaration.compilationResult.problemCount = problemCount;
-					}
+				final int problemCount = unit.compilationResult.problemCount;
+				if (problemCount != 0) {
+					unitDeclaration.compilationResult.problems = new CategorizedProblem[problemCount];
+					System.arraycopy(unit.compilationResult.problems, 0, unitDeclaration.compilationResult.problems, 0, problemCount);
+					unitDeclaration.compilationResult.problemCount = problemCount;
+				}
 				} else if (resolver.abortProblem != null) {
 					unitDeclaration.compilationResult.problemCount = 1;
 					unitDeclaration.compilationResult.problems = new CategorizedProblem[] { resolver.abortProblem };

@@ -7,9 +7,7 @@
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     Stephan Herrmann - Contributions for
- *								bug 186342 - [compiler][null] Using annotations for null checking
- *								bug 388281 - [compiler][null] inheritance of null annotations as an option
+ *     Stephan Herrmann - Contribution for bug 186342 - [compiler][null] Using annotations for null checking
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -62,9 +60,6 @@ public interface TagBits {
 	long IsEffectivelyFinal = ASTNode.Bit12; // local
 	long MultiCatchParameter = ASTNode.Bit13; // local
 	long IsResource = ASTNode.Bit14; // local
-
-	// have implicit null annotations been collected (inherited(?) & default)?
-	long IsNullnessKnown = ASTNode.Bit13; // method
 
 	// test bits to see if parts of binary types are faulted
 	long AreFieldsSorted = ASTNode.Bit13;

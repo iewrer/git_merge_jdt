@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,10 +7,7 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     Stephan Herrmann - Contributions for
- *								Bug 360328 - [compiler][null] detect null problems in nested code (local class inside a loop)
- *								Bug 388630 - @NonNull diagnostics at line 0
- *     Keigo Imai - Contribution for  bug 388903 - Cannot extend inner class as an anonymous class when it extends the outer class
+ *     Stephan Herrmann - Contribution for Bug 360328 - [compiler][null] detect null problems in nested code (local class inside a loop)
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -411,14 +408,6 @@ public MethodBinding createDefaultConstructorWithBinding(MethodBinding inherited
 			sourceType); //declaringClass
 	constructor.binding.tagBits |= (inheritedConstructorBinding.tagBits & TagBits.HasMissingType);
 	constructor.binding.modifiers |= ExtraCompilerModifiers.AccIsDefaultConstructor;
-	if (inheritedConstructorBinding.parameterNonNullness != null // this implies that annotation based null analysis is enabled
-			&& argumentsLength > 0) 
-	{
-		// copy nullness info from inherited constructor to the new constructor:
-		int len = inheritedConstructorBinding.parameterNonNullness.length;
-		System.arraycopy(inheritedConstructorBinding.parameterNonNullness, 0, 
-				constructor.binding.parameterNonNullness = new Boolean[len], 0, len);
-	}
 
 	constructor.scope = new MethodScope(this.scope, constructor, true);
 	constructor.bindArguments();
@@ -644,18 +633,6 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 			this.scope.problemReporter().unusedPrivateType(this);
 		}
 	}
-	
-	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=385780
-	if (this.typeParameters != null && 
-			!this.scope.referenceCompilationUnit().compilationResult.hasSyntaxError) {
-		for (int i = 0, length = this.typeParameters.length; i < length; ++i) {
-			TypeParameter typeParameter = this.typeParameters[i];
-			if ((typeParameter.binding.modifiers & ExtraCompilerModifiers.AccLocallyUsed) == 0) {
-				this.scope.problemReporter().unusedTypeParameter(typeParameter);			
-			}
-		}
-	}
-	
 	// for local classes we use the flowContext as our parent, but never use an initialization context for this purpose
 	// see Bug 360328 - [compiler][null] detect null problems in nested code (local class inside a loop)
 	FlowContext parentContext = (flowContext instanceof InitializationFlowContext) ? null : flowContext;
@@ -793,7 +770,7 @@ public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, Fl
 			if (enclosing.isNestedType()) {
 				NestedTypeBinding nestedEnclosing = (NestedTypeBinding)enclosing;
 //					if (nestedEnclosing.findSuperTypeErasingTo(nestedEnclosing.enclosingType()) == null) { // only if not inheriting
-					SyntheticArgumentBinding syntheticEnclosingInstanceArgument = nestedEnclosing.getSyntheticArgument(nestedEnclosing.enclosingType(), true, false);
+					SyntheticArgumentBinding syntheticEnclosingInstanceArgument = nestedEnclosing.getSyntheticArgument(nestedEnclosing.enclosingType(), true);
 					if (syntheticEnclosingInstanceArgument != null) {
 						nestedType.addSyntheticArgumentAndField(syntheticEnclosingInstanceArgument);
 					}
@@ -1357,7 +1334,7 @@ public void traverse(ASTVisitor visitor, CompilationUnitScope unitScope) {
 }
 
 /**
- *	Iteration for a local inner type
+ *	Iteration for a local innertype
  */
 public void traverse(ASTVisitor visitor, BlockScope blockScope) {
 	try {

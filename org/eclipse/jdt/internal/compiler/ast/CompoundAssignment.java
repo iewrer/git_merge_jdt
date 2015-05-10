@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,10 +7,6 @@
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     Stephan Herrmann - Contribution for
- *								bug 345305 - [compiler][null] Compiler misidentifies a case of "variable can only be null"
- *								bug 383368 - [compiler][null] syntactic null analysis for field references
- *								bug 402993 - [null] Follow up of bug 401088: Missing warning about redundant null check
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -45,8 +41,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 	// just a local variable.
 	if (this.resolvedType.id != T_JavaLangString) {
 		this.lhs.checkNPE(currentScope, flowContext, flowInfo);
-		// account for exceptions thrown by any arithmetics:
-		flowContext.recordAbruptExit();
 	}
 	flowInfo = ((Reference) this.lhs).analyseAssignment(currentScope, flowContext, flowInfo, this, true).unconditionalInits();
 	if (this.resolvedType.id == T_JavaLangString) {
@@ -55,7 +49,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		if (local != null) {
 			// compound assignment results in a definitely non null value for String
 			flowInfo.markAsDefinitelyNonNull(local);
-			flowContext.markFinallyNullStatus(local, FlowInfo.NON_NULL);
+			if (flowContext.initsOnFinally != null)
+				flowContext.initsOnFinally.markAsDefinitelyNonNull(local);
 		}
 	}
 	return flowInfo;
@@ -78,7 +73,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
-public int nullStatus(FlowInfo flowInfo, FlowContext flowContext) {
+public int nullStatus(FlowInfo flowInfo) {
 	return FlowInfo.NON_NULL;
 	// we may have complained on checkNPE, but we avoid duplicate error
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,9 +10,6 @@
  *     Stephan Herrmann - Contributions for 
  *     							bug 319201 - [null] no warning when unboxing SingleNameReference causes NPE
  *     							bug 349326 - [1.7] new warning for missing try-with-resources
- *								bug 345305 - [compiler][null] Compiler misidentifies a case of "variable can only be null"
- *								bug 383368 - [compiler][null] syntactic null analysis for field references
- *								bug 403147 - [compiler][null] FUP of bug 400761: consolidate interaction between unboxing, NPE, and deferred checking
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -63,11 +60,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	int initialComplaintLevel = (flowInfo.reachMode() & FlowInfo.UNREACHABLE) != 0 ? Statement.COMPLAINED_FAKE_REACHABLE : Statement.NOT_COMPLAINED;
 
 	Constant cst = this.condition.optimizedBooleanConstant();
-	this.condition.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
+	if ((this.condition.implicitConversion & TypeIds.UNBOXING) != 0) {
+		this.condition.checkNPE(currentScope, flowContext, flowInfo);
+	}
 	boolean isConditionOptimizedTrue = cst != Constant.NotAConstant && cst.booleanValue() == true;
 	boolean isConditionOptimizedFalse = cst != Constant.NotAConstant && cst.booleanValue() == false;
-
-	flowContext.conditionalLevel++;
 
 	// process the THEN part
 	FlowInfo thenFlowInfo = conditionFlowInfo.safeInitsWhenTrue();
@@ -104,8 +101,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 		}
 		thenFlowInfo = this.thenStatement.analyseCode(currentScope, flowContext, thenFlowInfo);
 	}
-	// any null check from the condition is now expired
-	flowContext.expireNullCheckedFieldInfo();
 	// code gen: optimizing the jump around the ELSE part
 	if ((thenFlowInfo.tagBits & FlowInfo.UNREACHABLE_OR_DEAD) != 0) {
 		this.bits |= ASTNode.ThenExit;
@@ -145,7 +140,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 		this,
 		reportDeadCodeForKnownPattern);
 	this.mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
-	flowContext.conditionalLevel--;
 	return mergedInfo;
 }
 
@@ -199,8 +193,8 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 				this.thenStatement.branchChainTo(endifLabel);
 				int position = codeStream.position;
 				codeStream.goto_(endifLabel);
-				//goto is pointing to the last line of the thenStatement
-				codeStream.recordPositionsFrom(position, this.thenStatement.sourceEnd);
+				//goto is tagged as part of the thenAction block
+				codeStream.updateLastRecordedEndPC((this.thenStatement instanceof Block) ? ((Block) this.thenStatement).scope : currentScope, position);
 				// generate else statement
 			}
 			// May loose some local variable initializations : affecting the local variable attributes

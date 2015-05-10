@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,15 +7,7 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     Stephan Herrmann - Contributions for
- *	 							bug 186342 - [compiler][null] Using annotations for null checking
- *								bug 387612 - Unreachable catch block...exception is never thrown from the try
- *								bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
- *								bug 401456 - Code compiles from javac/intellij, but fails from eclipse
- *								bug 401271 - StackOverflowError when searching for a methods references
- *								bug 405706 - Eclipse compiler fails to give compiler error when return type is a inferred generic
- *     Jesper S Moller - Contributions for
- *								Bug 378674 - "The method can be declared as static" is wrong
+ *     Stephan Herrmann - Contribution for bug 186342 [compiler][null] Using annotations for null checking
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -296,7 +288,7 @@ public abstract class Scope {
 	}
 
 	// 5.1.10
-	public static TypeBinding[] greaterLowerBound(TypeBinding[] types, /*@Nullable*/ Scope scope) {
+	public static TypeBinding[] greaterLowerBound(TypeBinding[] types) {
 		if (types == null) return null;
 		int length = types.length;
 		if (length == 0) return null;
@@ -309,22 +301,12 @@ public abstract class Scope {
 				if (i == j) continue;
 				TypeBinding jType = result[j];
 				if (jType == null) continue;
-				if (iType.isCompatibleWith(jType, scope)) { // if Vi <: Vj, Vj is removed
+				if (iType.isCompatibleWith(jType)) { // if Vi <: Vj, Vj is removed
 					if (result == types) { // defensive copy
 						System.arraycopy(result, 0, result = new TypeBinding[length], 0, length);
 					}
 					result[j] = null;
 					removed ++;
-				} else if (!jType.isCompatibleWith(iType, scope)) {
-					// avoid creating unsatisfiable intersection types (see https://bugs.eclipse.org/405706):
-					if (iType.isParameterizedType() && jType.isParameterizedType()) {
-						if (iType.original().isCompatibleWith(jType.original(), scope)
-								|| jType.original().isCompatibleWith(iType.original(), scope)) 
-						{
-							// parameterized types are incompatible due to incompatible type arguments => unsatisfiable
-							return null;
-						}
-					}
 				}
 			}
 		}
@@ -368,12 +350,13 @@ public abstract class Scope {
 	/**
 	 * Returns a type, where original type was substituted using the receiver
 	 * parameterized type.
-	 * In raw mode (see {@link Substitution#isRawSubstitution()}),
-	 * all parameterized types are converted to raw types.
-	 * Cf. 4.8: "The type of a constructor (8.8), instance method (8.4, 9.4),
-	 *  or non-static field (8.3) M of a raw type C that is not inherited from its 
-	 *  superclasses or superinterfaces is the raw type that corresponds to the erasure
-	 *  of its type in the generic declaration corresponding to C." 
+	 * In raw mode, all parameterized type denoting same original type are converted
+	 * to raw types. e.g.
+	 * class X <T> {
+	 *   X<T> foo;
+	 *   X<String> bar;
+	 * } when used in raw fashion, then type of both foo and bar is raw type X.
+	 *
 	 */
 	public static TypeBinding substitute(Substitution substitution, TypeBinding originalType) {
 		if (originalType == null) return null;
@@ -388,9 +371,6 @@ public abstract class Scope {
 				ReferenceBinding substitutedEnclosing = originalEnclosing;
 				if (originalEnclosing != null) {
 					substitutedEnclosing = (ReferenceBinding) substitute(substitution, originalEnclosing);
-					if (isMemberTypeOfRaw(originalType, substitutedEnclosing))
-						return originalParameterizedType.environment.createRawType(
-								originalParameterizedType.genericType(), substitutedEnclosing);
 				}
 				TypeBinding[] originalArguments = originalParameterizedType.arguments;
 				TypeBinding[] substitutedArguments = originalArguments;
@@ -432,7 +412,7 @@ public abstract class Scope {
 			    			TypeBinding [] bounds = new TypeBinding[1 + substitutedOtherBounds.length];
 			    			bounds[0] = substitutedBound;
 			    			System.arraycopy(substitutedOtherBounds, 0, bounds, 1, substitutedOtherBounds.length);
-			    			TypeBinding[] glb = Scope.greaterLowerBound(bounds, null); // re-evaluate
+			    			TypeBinding[] glb = Scope.greaterLowerBound(bounds); // re-evaluate
 			    			if (glb != null && glb != bounds) {
 			    				substitutedBound = glb[0];
 		    					if (glb.length == 1) {
@@ -454,8 +434,6 @@ public abstract class Scope {
 				substitutedEnclosing = originalEnclosing;
 				if (originalEnclosing != null) {
 					substitutedEnclosing = (ReferenceBinding) substitute(substitution, originalEnclosing);
-					if (isMemberTypeOfRaw(originalType, substitutedEnclosing))
-						return substitution.environment().createRawType(originalReferenceType, substitutedEnclosing);
 				}
 
 			    // treat as if parameterized with its type variables (non generic type gets 'null' arguments)
@@ -471,8 +449,6 @@ public abstract class Scope {
 				substitutedEnclosing = originalEnclosing;
 				if (originalEnclosing != null) {
 					substitutedEnclosing = (ReferenceBinding) substitute(substitution, originalEnclosing);
-					if (isMemberTypeOfRaw(originalType, substitutedEnclosing))
-						return substitution.environment().createRawType(originalReferenceType, substitutedEnclosing);
 				}
 
 				if (substitution.isRawSubstitution()) {
@@ -484,19 +460,6 @@ public abstract class Scope {
 				return substitution.environment().createParameterizedType(originalReferenceType, substitutedArguments, substitutedEnclosing);
 		}
 		return originalType;
-	}
-
-	private static boolean isMemberTypeOfRaw(TypeBinding originalType, ReferenceBinding substitutedEnclosing) {
-		// 4.8:
-		// "a raw type is defined to be one of:
-		// ...
-	    // * A non-static member type of a raw type R that is not 
-		//   inherited from a superclass or superinterface of R."
-
-		// Due to staticness, e.g., Map.Entry<String,Object> is *not* considered as a raw type
-
-		return (substitutedEnclosing != null && substitutedEnclosing.isRawType()) 
-				&& ((originalType instanceof ReferenceBinding) && !((ReferenceBinding)originalType).isStatic());
 	}
 
 	/**
@@ -589,9 +552,9 @@ public abstract class Scope {
 		if (argLength != paramLength)
 			if (!isVarArgs || argLength < paramLength - 1)
 				return null; // incompatible
-		CompilerOptions compilerOptions = this.compilerOptions();
+
 		// https://bugs.eclipse.org/bugs/show_bug.cgi?id=330435, inference should kick in only at source 1.5+
-		if (typeVariables != Binding.NO_TYPE_VARIABLES && compilerOptions.sourceLevel >= ClassFileConstants.JDK1_5) { // generic method
+		if (typeVariables != Binding.NO_TYPE_VARIABLES && compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) { // generic method
 			TypeBinding[] newArgs = null;
 			for (int i = 0; i < argLength; i++) {
 				TypeBinding param = i < paramLength ? parameters[i] : parameters[paramLength - 1];
@@ -608,7 +571,7 @@ public abstract class Scope {
 			method = ParameterizedGenericMethodBinding.computeCompatibleMethod(method, arguments, this, invocationSite);
 			if (method == null) return null; // incompatible
 			if (!method.isValidBinding()) return method; // bound check issue is taking precedence
-		} else if (genericTypeArguments != null && compilerOptions.complianceLevel < ClassFileConstants.JDK1_7) {
+		} else if (genericTypeArguments != null && compilerOptions().complianceLevel < ClassFileConstants.JDK1_7) {
 			if (method instanceof ParameterizedGenericMethodBinding) {
 				if (!((ParameterizedGenericMethodBinding) method).wasInferred)
 					// attempt to invoke generic method of raw type with type hints <String>foo()
@@ -619,10 +582,6 @@ public abstract class Scope {
 		}
 
 		int compatibilityLevel;
-		if (tiebreakingVarargsMethods) {
-			if (CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation && compilerOptions.complianceLevel < ClassFileConstants.JDK1_7)
-				tiebreakingVarargsMethods = false;
-		}
 		if ((compatibilityLevel = parameterCompatibilityLevel(method, arguments, tiebreakingVarargsMethods)) > NOT_COMPATIBLE) {
 			if (compatibilityLevel == VARARGS_COMPATIBLE) {
 				TypeBinding varargsElementType = method.parameters[method.parameters.length - 1].leafComponentType();
@@ -1038,11 +997,7 @@ public abstract class Scope {
 			    }
 				// targeting a generic method could find an exact match with variable return type
 				if (invocationSite.genericTypeArguments() != null) {
-					// computeCompatibleMethod(..) will return a PolymorphicMethodBinding if needed
 					exactMethod = computeCompatibleMethod(exactMethod, argumentTypes, invocationSite);
-				} else if ((exactMethod.tagBits & TagBits.AnnotationPolymorphicSignature) != 0) {
-					// generate polymorphic method
-					return this.environment().createPolymorphicMethod(exactMethod, argumentTypes);
 				}
 				return exactMethod;
 			}
@@ -1724,14 +1679,13 @@ public abstract class Scope {
 				ProblemFieldBinding foundInsideProblem = null;
 				// inside Constructor call or inside static context
 				Scope scope = this;
-				MethodScope methodScope = null;
 				int depth = 0;
 				int foundDepth = 0;
 				ReferenceBinding foundActualReceiverType = null;
 				done : while (true) { // done when a COMPILATION_UNIT_SCOPE is found
 					switch (scope.kind) {
 						case METHOD_SCOPE :
-							methodScope = (MethodScope) scope;
+							MethodScope methodScope = (MethodScope) scope;
 							insideStaticContext |= methodScope.isStatic;
 							insideConstructorCall |= methodScope.isConstructorCall;
 							insideTypeAnnotation = methodScope.insideTypeAnnotation;
@@ -1790,8 +1744,6 @@ public abstract class Scope {
 														fieldBinding.declaringClass,
 														name,
 														ProblemReasons.NonStaticReferenceInStaticContext);
-											} else if (methodScope != null) {
-												methodScope.resetEnclosingMethodStaticFlag();
 											}
 										}
 										if (receiverType == fieldBinding.declaringClass || compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4) {
@@ -2093,7 +2045,6 @@ public abstract class Scope {
 		MethodBinding foundProblem = null;
 		boolean foundProblemVisible = false;
 		Scope scope = this;
-		MethodScope methodScope = null;
 		int depth = 0;
 		// in 1.4 mode (inherited visible shadows enclosing)
 		CompilerOptions options;
@@ -2102,7 +2053,7 @@ public abstract class Scope {
 		done : while (true) { // done when a COMPILATION_UNIT_SCOPE is found
 			switch (scope.kind) {
 				case METHOD_SCOPE :
-					methodScope = (MethodScope) scope;
+					MethodScope methodScope = (MethodScope) scope;
 					insideStaticContext |= methodScope.isStatic;
 					insideConstructorCall |= methodScope.isConstructorCall;
 					insideTypeAnnotation = methodScope.insideTypeAnnotation;
@@ -2129,8 +2080,6 @@ public abstract class Scope {
 											insideConstructorCall
 												? ProblemReasons.NonStaticReferenceInConstructorInvocation
 												: ProblemReasons.NonStaticReferenceInStaticContext);
-									} else if (!methodBinding.isStatic() && methodScope != null) {
-										methodScope.resetDeclaringClassMethodStaticFlag(receiverType);
 									}
 									if (inheritedHasPrecedence
 											|| receiverType == methodBinding.declaringClass
@@ -2501,7 +2450,7 @@ public abstract class Scope {
 	*/
 	// The return type of this method could be ReferenceBinding if we did not answer base types.
 	// NOTE: We could support looking for Base Types last in the search, however any code using
-	// this feature would be extraordinarily slow. Therefore we don't do this.
+	// this feature would be extraordinarily slow.  Therefore we don't do this
 	public final TypeBinding getType(char[] name) {
 		// Would like to remove this test and require senders to specially handle base types
 		TypeBinding binding = getBaseType(name);
@@ -2633,7 +2582,6 @@ public abstract class Scope {
 	*/
 	final Binding getTypeOrPackage(char[] name, int mask, boolean needResolve) {
 		Scope scope = this;
-		MethodScope methodScope = null;
 		ReferenceBinding foundType = null;
 		boolean insideStaticContext = false;
 		boolean insideTypeAnnotation = false;
@@ -2646,7 +2594,7 @@ public abstract class Scope {
 			done : while (true) { // done when a COMPILATION_UNIT_SCOPE is found
 				switch (scope.kind) {
 					case METHOD_SCOPE :
-						methodScope = (MethodScope) scope;
+						MethodScope methodScope = (MethodScope) scope;
 						AbstractMethodDeclaration methodDecl = methodScope.referenceMethod();
 						if (methodDecl != null) {
 							if (methodDecl.binding != null) {
@@ -2720,8 +2668,6 @@ public abstract class Scope {
 						if (typeVariable != null) {
 							if (insideStaticContext) // do not consider this type modifiers: access is legite within same type
 								return new ProblemReferenceBinding(new char[][]{name}, typeVariable, ProblemReasons.NonStaticReferenceInStaticContext);
-							else if (methodScope != null)
-								methodScope.resetEnclosingMethodStaticFlag();
 							return typeVariable;
 						}
 						insideStaticContext |= sourceType.isStatic();
@@ -2788,11 +2734,53 @@ public abstract class Scope {
 					}
 				}
 			}
-			// In this location we had a fix for 
+			// walk single static imports. A type found here will shadow types with same name in other CU's, or types coming
+			// from on-demand imports. JLS 7.5.3
 			// https://bugs.eclipse.org/bugs/show_bug.cgi?id=318401
-			// However, as of today (4.3M6 candidate) this fix seems unnecessary, while causing StackOverflowError in
-			// https://bugs.eclipse.org/bugs/show_bug.cgi?id=401271
-
+			if (imports != null) {
+				ReferenceBinding type = null;
+				nextImport : for (int i = 0, length = imports.length; i < length; i++) {
+					ImportBinding importBinding = imports[i];
+					if (importBinding.isStatic()) {
+						ReferenceBinding temp = null;
+						if (CharOperation.equals(importBinding.compoundName[importBinding.compoundName.length - 1], name)) {
+							Binding resolvedImport = importBinding.resolvedImport;
+							if (resolvedImport == null) continue nextImport;
+							if (resolvedImport instanceof MethodBinding || resolvedImport instanceof FieldBinding) {
+								// check to see if there are also member types with the same name
+								// must find the importRef's type again since the method/field can be from an inherited type
+								// see StaticImportTest#test084 for more clarity
+								char[][] importName = importBinding.reference.tokens;
+								TypeBinding referencedType = getType(importName, importName.length - 1);
+								if (referencedType != null && referencedType instanceof ReferenceBinding) {
+									temp = findMemberType(name, (ReferenceBinding) referencedType);
+								}
+							}
+							if (temp != null && temp.isStatic() && temp != type) {
+								if (temp.isValidBinding()) {
+									if (!temp.canBeSeenBy(unitScope.fPackage)) {
+										// Answer error binding - type is not visible
+										foundType = new ProblemReferenceBinding(new char[][]{name}, type, ProblemReasons.NotVisible);
+									} else {
+										ImportReference importReference = importBinding.reference;
+										if (importReference != null) {
+											importReference.bits |= ASTNode.Used;
+										}
+										type = temp;
+									}
+								} else if (foundType == null) {
+									foundType = temp;
+								}
+							}
+						}
+					}
+				}
+				if (type != null) {
+					if (typeOrPackageCache != null)
+						typeOrPackageCache.put(name, type);
+					return type;
+				}
+			}
 			// check if the name is in the current package, skip it if its a sub-package
 			PackageBinding currentPackage = unitScope.fPackage;
 			unitScope.recordReference(currentPackage.compoundName, name);
@@ -3041,13 +3029,8 @@ public abstract class Scope {
 					if (i == oneParamsLength - 1 && one.isVarargs() && two.isVarargs()) {
 						TypeBinding oType = ((ArrayBinding) oneParam).elementsType();
 						TypeBinding eType = ((ArrayBinding) twoParam).elementsType();
-						if (CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation && this.compilerOptions().complianceLevel < ClassFileConstants.JDK1_7) {
-							if (oneParam == eType || oneParam.isCompatibleWith(eType))
-								return true; // special case to choose between 2 varargs methods when the last arg is Object[]
-						} else {
-							if (oType == eType || oType.isCompatibleWith(eType))
-								return true; // special case to choose between 2 varargs methods when the last arg is Object[]
-						}
+						if (oType == eType || oType.isCompatibleWith(eType))
+							return true; // special case to choose between 2 varargs methods when the last arg is Object[]
 					}
 					return false;
 				}
@@ -3056,12 +3039,6 @@ public abstract class Scope {
 		}
 
 		if (one.isVarargs() && two.isVarargs()) {
-			if (CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation && this.compilerOptions().complianceLevel < ClassFileConstants.JDK1_7 && 
-					oneParamsLength > twoParamsLength) {
-				// special case when autoboxing makes (int, int...) better than (Object...) but not (int...) or (Integer, int...)
-				if (((ArrayBinding) twoParams[twoParamsLength - 1]).elementsType().id != TypeIds.T_JavaLangObject)
-					return false;
-			}
 			// check that each parameter before the vararg parameters are compatible (no autoboxing allowed here)
 			for (int i = (oneParamsLength > twoParamsLength ? twoParamsLength : oneParamsLength) - 2; i >= 0; i--)
 				if (oneParams[i] != twoParams[i] && !oneParams[i].isCompatibleWith(twoParams[i]))
@@ -3350,7 +3327,7 @@ public abstract class Scope {
 					case Wildcard.SUPER :
 						// ? super U, ? super V
 						if (wildU.boundKind == Wildcard.SUPER) {
-							TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound,wildV.bound}, this);
+							TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound,wildV.bound});
 							if (glb == null) return null;
 							return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
 						}
@@ -3366,7 +3343,7 @@ public abstract class Scope {
 						return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);
 					// U, ? super V
 					case Wildcard.SUPER :
-						TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{u,wildV.bound}, this);
+						TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{u,wildV.bound});
 						if (glb == null) return null;
 						return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
 					case Wildcard.UNBOUND :
@@ -3384,7 +3361,7 @@ public abstract class Scope {
 					return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);
 				// U, ? super V
 				case Wildcard.SUPER :
-					TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound, v}, this);
+					TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound, v});
 					if (glb == null) return null;
 					return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER); // TODO (philippe) need to capture entire bounds
 				case Wildcard.UNBOUND :
@@ -3977,14 +3954,13 @@ public abstract class Scope {
 										mostSpecificExceptions = current.thrownExceptions;
 									}
 									int mostSpecificLength = mostSpecificExceptions.length;
-									ReferenceBinding[] nextExceptions = getFilteredExceptions(next);
-									int nextLength = nextExceptions.length;
+									int nextLength = next.thrownExceptions.length;
 									SimpleSet temp = new SimpleSet(mostSpecificLength);
 									boolean changed = false;
 									nextException : for (int t = 0; t < mostSpecificLength; t++) {
 										ReferenceBinding exception = mostSpecificExceptions[t];
 										for (int s = 0; s < nextLength; s++) {
-											ReferenceBinding nextException = nextExceptions[s];
+											ReferenceBinding nextException = next.thrownExceptions[s];
 											if (exception.isCompatibleWith(nextException)) {
 												temp.add(exception);
 												continue nextException;
@@ -4017,41 +3993,6 @@ public abstract class Scope {
 		return new ProblemMethodBinding(visible[0], visible[0].selector, visible[0].parameters, ProblemReasons.Ambiguous);
 	}
 
-	private ReferenceBinding[] getFilteredExceptions(MethodBinding method) {
-		// http://bugs.eclipse.org/387612 - Unreachable catch block...exception is never thrown from the try
-		// Need to filter redundant exceptions within the same throws clause.
-		// In this filtering the *most general* exception wins in order to capture all possible exceptions
-		// that could be thrown by the given method.
-		ReferenceBinding[] allExceptions = method.thrownExceptions;
-		int length = allExceptions.length;
-		if (length < 2) return allExceptions;
-		ReferenceBinding[] filteredExceptions = new ReferenceBinding[length];
-		int count = 0;
-		currents: for (int i = 0; i < length; i++) {
-			ReferenceBinding currentException = allExceptions[i];
-			for (int j = 0; j < length; j++) {
-				if (i == j) continue;
-				if (currentException == allExceptions[j]) {
-					// duplicate same exception
-					if (i < j) 
-						break; // take only the first occurrence
-					else
-						continue currents; // skip
-				}
-				if (currentException.isCompatibleWith(allExceptions[j])) {
-					continue currents; // skip
-				}
-			}
-			filteredExceptions[count++] = currentException;
-		}
-		if (count != length) {
-			ReferenceBinding[] tmp = new ReferenceBinding[count];
-			System.arraycopy(filteredExceptions, 0, tmp,  0, count);
-			return tmp;
-		}
-		return allExceptions;
-	}
-
 	public final ClassScope outerMostClassScope() {
 		ClassScope lastClassScope = null;
 		Scope scope = this;
@@ -4082,8 +4023,7 @@ public abstract class Scope {
 		int paramLength = parameters.length;
 		int argLength = arguments.length;
 
-		CompilerOptions compilerOptions = compilerOptions();
-		if (compilerOptions.sourceLevel < ClassFileConstants.JDK1_5) {
+		if (compilerOptions().sourceLevel < ClassFileConstants.JDK1_5) {
 			if (paramLength != argLength)
 				return NOT_COMPATIBLE;
 			for (int i = 0; i < argLength; i++) {
@@ -4095,11 +4035,7 @@ public abstract class Scope {
 			}
 			return COMPATIBLE;
 		}
-	    if (tiebreakingVarargsMethods) {
-	        if (CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation && compilerOptions.complianceLevel < ClassFileConstants.JDK1_7) {
-	            tiebreakingVarargsMethods = false;
-	        }
-	    }
+
 		int level = COMPATIBLE; // no autoboxing or varargs support needed
 		int lastIndex = argLength;
 		LookupEnvironment env = environment();
@@ -4154,9 +4090,9 @@ public abstract class Scope {
 
 	private int parameterCompatibilityLevel(TypeBinding arg, TypeBinding param, LookupEnvironment env, boolean tieBreakingVarargsMethods) {
 		// only called if env.options.sourceLevel >= ClassFileConstants.JDK1_5
-		if (arg.isCompatibleWith(param, this))
+		if (arg.isCompatibleWith(param))
 			return COMPATIBLE;
-		if (tieBreakingVarargsMethods && (this.compilerOptions().complianceLevel >= ClassFileConstants.JDK1_7 || !CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation)) {
+		if (tieBreakingVarargsMethods) {
 			/* 15.12.2.5 Choosing the Most Specific Method, ... One variable arity member method named m is more specific than
 			   another variable arity member method of the same name if either ... Only subtypes relationship should be used.
 			   Actually this is true even for fixed arity methods, but in practice is not an issue since we run the algorithm

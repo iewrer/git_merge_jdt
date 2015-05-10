@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -4045,7 +4045,7 @@ public void invokeIterableIterator(TypeBinding iterableReceiverType) {
 public void invokeAutoCloseableClose(TypeBinding resourceType) {
 	// invokevirtual/interface: <resourceType>.close()
 	invoke(
-			resourceType.erasure().isInterface() ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual,
+			resourceType.isInterface() ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual,
 			1, // receiverAndArgsSize
 			0, // returnTypeSize
 			resourceType.constantPoolName(), 
@@ -5841,8 +5841,7 @@ public void recordPositionsFrom(int startPC, int sourcePos, boolean widen) {
 	 */
 	if ((this.generateAttributes & ClassFileConstants.ATTR_LINES) == 0
 			|| sourcePos == 0
-			|| (startPC == this.position && !widen)
-			|| startPC > this.position)
+			|| (startPC == this.position && !widen))
 		return;
 
 	// Widening an existing entry that already has the same source positions
@@ -6653,6 +6652,46 @@ public String toString() {
 	buffer.append(")"); //$NON-NLS-1$
 	return buffer.toString();
 }
+
+/**
+ * Note: it will walk the locals table and extend the end range for all matching ones, no matter if
+ * visible or not.
+ * {  int i = 0;
+ *    {  int j = 1; }
+ * }   <== would process both 'i' and 'j'
+ * Processing non-visible ones is mandated in some cases (include goto instruction after if-then block)
+ */
+public void updateLastRecordedEndPC(Scope scope, int pos) {
+
+	/* Tune positions in the table, this is due to some
+	 * extra bytecodes being
+	 * added to some user code (jumps). */
+	/** OLD CODE
+		if (!generateLineNumberAttributes)
+			return;
+		pcToSourceMap[pcToSourceMapSize - 1][1] = position;
+		// need to update the initialization endPC in case of generation of local variable attributes.
+		updateLocalVariablesAttribute(pos);
+	*/
+
+	if ((this.generateAttributes & ClassFileConstants.ATTR_LINES) != 0) {
+		this.lastEntryPC = pos;
+	}
+	// need to update the initialization endPC in case of generation of local variable attributes.
+	if ((this.generateAttributes & (ClassFileConstants.ATTR_VARS
+			| ClassFileConstants.ATTR_STACK_MAP_TABLE
+			| ClassFileConstants.ATTR_STACK_MAP)) != 0) {
+		for (int i = 0, max = this.locals.length; i < max; i++) {
+			LocalVariableBinding local = this.locals[i];
+			if (local != null && local.declaringScope == scope && local.initializationCount > 0) {
+				if (local.initializationPCs[((local.initializationCount - 1) << 1) + 1] == pos) {
+					local.initializationPCs[((local.initializationCount - 1) << 1) + 1] = this.position;
+				}
+			}
+		}
+	}
+}
+
 protected void writePosition(BranchLabel label) {
 	int offset = label.position - this.position + 1;
 	if (Math.abs(offset) > 0x7FFF && !this.wideMode) {

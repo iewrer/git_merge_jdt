@@ -7,7 +7,16 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+<<<<<<< HEAD
  *     Stephan Herrmann <stephan@cs.tu-berlin.de> - Contribution for bug 185682 - Increment/decrement operators mark local variables as read
+=======
+ *     Stephan Herrmann <stephan@cs.tu-berlin.de> - Contributions for
+ *								bug 185682 - Increment/decrement operators mark local variables as read
+ *								bug 331649 - [compiler][null] consider null annotations for fields
+ *								bug 383368 - [compiler][null] syntactic null analysis for field references
+ *     Jesper S Moller - Contributions for
+ *								Bug 378674 - "The method can be declared as static" is wrong
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -107,6 +116,7 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 			// assigning a final field outside an initializer or constructor or wrong reference
 			currentScope.problemReporter().cannotAssignToFinalField(this.binding, this);
 		}
+<<<<<<< HEAD
 	}
 	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=318682
 	if (!this.binding.isStatic()) {
@@ -118,6 +128,16 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 			// explicit this, not allowed in static context
 			currentScope.resetDeclaringClassMethodStaticFlag(this.binding.declaringClass);
 		}
+=======
+	} else if (this.binding.isNonNull()) {
+		// in a context where it can be assigned?
+		if (   !isCompound
+			&& this.receiver.isThis()
+			&& !(this.receiver instanceof QualifiedThisReference)
+			&& ((this.receiver.bits & ASTNode.ParenthesizedMASK) == 0)) { // (this).x is forbidden
+			flowInfo.markAsDefinitelyAssigned(this.binding);
+		}		
+>>>>>>> patch
 	}
 	return flowInfo;
 }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -7,6 +8,17 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+>>>>>>> patch
  *     Stephan Herrmann <stephan@cs.tu-berlin.de> - Contributions for
  *								bug 328281 - visibility leaks not detected when analyzing unused field in private class
  *								bug 349326 - [1.7] new warning for missing try-with-resources
@@ -16,6 +28,7 @@
  *								bug 365662 - [compiler][null] warn on contradictory and redundant null annotations
  *								bug 365531 - [compiler][null] investigate alternative strategy for internally encoding nullness defaults
  *								bug 366063 - Compiler should not add synthetic @NonNull annotations
+<<<<<<< HEAD
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -35,6 +48,34 @@ import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
+=======
+ *								bug 384663 - Package Based Annotation Compilation Error in JDT 3.8/4.2 (works in 3.7.2)
+ *								bug 386356 - Type mismatch error with annotations and generics
+ *								bug 388281 - [compiler][null] inheritance of null annotations as an option
+ *								bug 331649 - [compiler][null] consider null annotations for fields
+ *								bug 380896 - [compiler][null] Enum constants not recognised as being NonNull.
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler.lookup;
+// GROOVY PATCHED
+
+import java.util.HashMap;
+import java.util.Iterator;
+
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Annotation;
+import org.eclipse.jdt.internal.compiler.ast.Argument;
+import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
+import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+>>>>>>> patch
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
 import org.eclipse.jdt.internal.compiler.util.Util;
@@ -654,7 +695,7 @@ public char[] computeUniqueKey(boolean isLeaf) {
 		if (start == 0)
 			start = 1; // start after L
 		if (this.isMemberType()) {
-			end = CharOperation.indexOf('$', uniqueKey, start);
+		end = CharOperation.indexOf('$', uniqueKey, start);
 		} else {
 			// '$' is part of the type name
 			end = -1;
@@ -983,6 +1024,13 @@ public FieldBinding getField(char[] fieldName, boolean needResolve) {
 	return null;
 }
 
+// GROOVY start
+// FIXASC (M3) is this the right approach to adding extra methods? Probably not - they should be forced on when created
+public MethodBinding[] getAnyExtraMethods(char[] selector) {
+	return (this.scope==null?null:this.scope.getAnyExtraMethods(selector));
+}
+// GROOVY end
+
 // NOTE: the return type, arg & exception types of each method of a source type are resolved when needed
 public MethodBinding[] getMethods(char[] selector) {
 	if ((this.tagBits & TagBits.AreMethodsComplete) != 0) {
@@ -1081,6 +1129,7 @@ public boolean hasTypeBit(int bit) {
 	return (this.typeBits & bit) != 0;
 }
 
+<<<<<<< HEAD
 /**
  * @see org.eclipse.jdt.internal.compiler.lookup.Binding#initializeDeprecatedAnnotationTagBits()
  */
@@ -1192,6 +1241,133 @@ public MethodBinding[] methods() {
 	MethodBinding[] resolvedMethods = this.methods;
 	try {
 		for (int i = 0, length = this.methods.length; i < length; i++) {
+=======
+/**
+ * @see org.eclipse.jdt.internal.compiler.lookup.Binding#initializeDeprecatedAnnotationTagBits()
+ */
+public void initializeDeprecatedAnnotationTagBits() {
+	if ((this.tagBits & TagBits.DeprecatedAnnotationResolved) == 0) {
+		TypeDeclaration typeDecl = this.scope.referenceContext;
+		boolean old = typeDecl.staticInitializerScope.insideTypeAnnotation;
+		try {
+			typeDecl.staticInitializerScope.insideTypeAnnotation = true;
+			ASTNode.resolveDeprecatedAnnotations(typeDecl.staticInitializerScope, typeDecl.annotations, this);
+			this.tagBits |= TagBits.DeprecatedAnnotationResolved;
+		} finally {
+			typeDecl.staticInitializerScope.insideTypeAnnotation = old;
+		}
+		if ((this.tagBits & TagBits.AnnotationDeprecated) != 0) {
+			this.modifiers |= ClassFileConstants.AccDeprecated;
+		}
+	}
+}
+
+// ensure the receiver knows its hierarchy & fields/methods so static imports can be resolved correctly
+// see bug 230026
+void initializeForStaticImports() {
+	if (this.scope == null) return; // already initialized
+
+	if (this.superInterfaces == null)
+		this.scope.connectTypeHierarchy();
+	this.scope.buildFields();
+	this.scope.buildMethods();
+}
+
+private void initializeNullDefault() {
+	// ensure nullness defaults are initialized at all enclosing levels:
+	switch (this.nullnessDefaultInitialized) {
+	case 0:
+		getAnnotationTagBits(); // initialize
+		//$FALL-THROUGH$
+	case 1:
+		getPackage().isViewedAsDeprecated(); // initialize annotations
+		this.nullnessDefaultInitialized = 2;
+	}
+}
+
+/**
+ * Returns true if a type is identical to another one,
+ * or for generic types, true if compared to its raw type.
+ */
+public boolean isEquivalentTo(TypeBinding otherType) {
+
+	if (this == otherType) return true;
+	if (otherType == null) return false;
+	switch(otherType.kind()) {
+
+		case Binding.WILDCARD_TYPE :
+		case Binding.INTERSECTION_TYPE:
+			return ((WildcardBinding) otherType).boundCheck(this);
+
+		case Binding.PARAMETERIZED_TYPE :
+			if ((otherType.tagBits & TagBits.HasDirectWildcard) == 0 && (!isMemberType() || !otherType.isMemberType()))
+				return false; // should have been identical
+			ParameterizedTypeBinding otherParamType = (ParameterizedTypeBinding) otherType;
+			if (this != otherParamType.genericType())
+				return false;
+			if (!isStatic()) { // static member types do not compare their enclosing
+            	ReferenceBinding enclosing = enclosingType();
+            	if (enclosing != null) {
+            		ReferenceBinding otherEnclosing = otherParamType.enclosingType();
+            		if (otherEnclosing == null) return false;
+            		if ((otherEnclosing.tagBits & TagBits.HasDirectWildcard) == 0) {
+						if (enclosing != otherEnclosing) return false;
+            		} else {
+            			if (!enclosing.isEquivalentTo(otherParamType.enclosingType())) return false;
+            		}
+            	}
+			}
+			int length = this.typeVariables == null ? 0 : this.typeVariables.length;
+			TypeBinding[] otherArguments = otherParamType.arguments;
+			int otherLength = otherArguments == null ? 0 : otherArguments.length;
+			if (otherLength != length)
+				return false;
+			for (int i = 0; i < length; i++)
+				if (!this.typeVariables[i].isTypeArgumentContainedBy(otherArguments[i]))
+					return false;
+			return true;
+
+		case Binding.RAW_TYPE :
+	        return otherType.erasure() == this;
+	}
+	return false;
+}
+public boolean isGenericType() {
+    return this.typeVariables != Binding.NO_TYPE_VARIABLES;
+}
+public boolean isHierarchyConnected() {
+	return (this.tagBits & TagBits.EndHierarchyCheck) != 0;
+}
+public ReferenceBinding[] memberTypes() {
+	return this.memberTypes;
+}
+
+public boolean hasMemberTypes() {
+    return this.memberTypes.length > 0;
+}
+
+// NOTE: the return type, arg & exception types of each method of a source type are resolved when needed
+public MethodBinding[] methods() {
+	if ((this.tagBits & TagBits.AreMethodsComplete) != 0)
+		return this.methods;
+
+	if (!areMethodsInitialized()) { // https://bugs.eclipse.org/384663
+		this.scope.buildMethods();
+	}
+
+	// lazily sort methods
+	if ((this.tagBits & TagBits.AreMethodsSorted) == 0) {
+		int length = this.methods.length;
+		if (length > 1)
+			ReferenceBinding.sortMethods(this.methods, 0, length);
+		this.tagBits |= TagBits.AreMethodsSorted;
+	}
+
+	int failed = 0;
+	MethodBinding[] resolvedMethods = this.methods;
+	try {
+		for (int i = 0, length = this.methods.length; i < length; i++) {
+>>>>>>> patch
 			if ((this.tagBits & TagBits.AreMethodsComplete) != 0) {
 				// recursive call to methods() from resolveTypesFor(..) resolved the methods
 				return this.methods;
@@ -1265,7 +1441,7 @@ public MethodBinding[] methods() {
 													break;
 												}
 											} else  {
-												break;
+											break;
 											}
 										}
 										if (params1[index] == params2[index]) {
@@ -1286,7 +1462,7 @@ public MethodBinding[] methods() {
 														break;
 													}
 												} else  {
-													break;
+												break;
 												}
 											}
 										
@@ -1403,6 +1579,37 @@ public FieldBinding resolveTypeFor(FieldBinding field) {
 	FieldDeclaration[] fieldDecls = this.scope.referenceContext.fields;
 	int length = fieldDecls == null ? 0 : fieldDecls.length;
 	for (int f = 0; f < length; f++) {
+<<<<<<< HEAD
+		if (fieldDecls[f].binding != field)
+			continue;
+
+			MethodScope initializationScope = field.isStatic()
+				? this.scope.referenceContext.staticInitializerScope
+				: this.scope.referenceContext.initializerScope;
+			FieldBinding previousField = initializationScope.initializedField;
+			try {
+				initializationScope.initializedField = field;
+				FieldDeclaration fieldDecl = fieldDecls[f];
+				TypeBinding fieldType =
+					fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT
+						? initializationScope.environment().convertToRawType(this, false /*do not force conversion of enclosing types*/) // enum constant is implicitly of declaring enum type
+						: fieldDecl.type.resolveType(initializationScope, true /* check bounds*/);
+				field.type = fieldType;
+				field.modifiers &= ~ExtraCompilerModifiers.AccUnresolved;
+				if (fieldType == null) {
+					fieldDecl.binding = null;
+					return null;
+				}
+				if (fieldType == TypeBinding.VOID) {
+					this.scope.problemReporter().variableTypeCannotBeVoid(fieldDecl);
+					fieldDecl.binding = null;
+					return null;
+				}
+				if (fieldType.isArrayType() && ((ArrayBinding) fieldType).leafComponentType == TypeBinding.VOID) {
+					this.scope.problemReporter().variableTypeCannotBeVoidArray(fieldDecl);
+					fieldDecl.binding = null;
+					return null;
+=======
 		if (fieldDecls[f].binding != field)
 			continue;
 
@@ -1440,9 +1647,33 @@ public FieldBinding resolveTypeFor(FieldBinding field) {
 				if (leafType instanceof ReferenceBinding && (((ReferenceBinding)leafType).modifiers & ExtraCompilerModifiers.AccGenericSignature) != 0) {
 					field.modifiers |= ExtraCompilerModifiers.AccGenericSignature;
 				}
+
+			// apply null default:
+			LookupEnvironment environment = this.scope.environment();
+			if (environment.globalOptions.isAnnotationBasedNullAnalysisEnabled) {
+				if (fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
+					// enum constants neither have a type declaration nor can they be null
+					field.tagBits |= TagBits.AnnotationNonNull;
+				} else {
+					initializeNullDefault();
+					if (hasNonNullDefault()) {
+						field.fillInDefaultNonNullness(fieldDecl, initializationScope);
+					}
+					// validate null annotation:
+					this.scope.validateNullAnnotation(field.tagBits, fieldDecl.type, fieldDecl.annotations);
+>>>>>>> patch
+				}
+				if ((fieldType.tagBits & TagBits.HasMissingType) != 0) {
+					field.tagBits |= TagBits.HasMissingType;
+				}
+				TypeBinding leafType = fieldType.leafComponentType();
+				if (leafType instanceof ReferenceBinding && (((ReferenceBinding)leafType).modifiers & ExtraCompilerModifiers.AccGenericSignature) != 0) {
+					field.modifiers |= ExtraCompilerModifiers.AccGenericSignature;
+				}
 			} finally {
 			    initializationScope.initializedField = previousField;
 			}
+<<<<<<< HEAD
 		return field;
 	}
 	return null; // should never reach this point
@@ -1500,6 +1731,90 @@ public MethodBinding resolveTypesFor(MethodBinding method) {
 		if (count < size)
 			System.arraycopy(method.thrownExceptions, 0, method.thrownExceptions = new ReferenceBinding[count], 0, count);
 	}
+=======
+			} finally {
+			    initializationScope.initializedField = previousField;
+			}
+		return field;
+	}
+	return null; // should never reach this point
+}
+public MethodBinding resolveTypesFor(MethodBinding method) {
+	if ((method.modifiers & ExtraCompilerModifiers.AccUnresolved) == 0)
+		return method;
+
+	if (this.scope.compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) {
+		if ((method.getAnnotationTagBits() & TagBits.AnnotationDeprecated) != 0)
+			method.modifiers |= ClassFileConstants.AccDeprecated;
+	}
+	if (isViewedAsDeprecated() && !method.isDeprecated())
+		method.modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
+	if (hasRestrictedAccess())
+		method.modifiers |= ExtraCompilerModifiers.AccRestrictedAccess;
+
+	AbstractMethodDeclaration methodDecl = method.sourceMethod();
+	// GROOVY
+	/* old {
+	if (methodDecl == null) return null; // method could not be resolved in previous iteration
+    } new*/
+	if (methodDecl == null) {
+		if (method instanceof LazilyResolvedMethodBinding) {
+			LazilyResolvedMethodBinding lrMethod = (LazilyResolvedMethodBinding)method;
+			// the rest is a copy of the code below but doesn't depend on the method declaration
+			// nothing to do for method type parameters (there are none)
+			// nothing to do for method exceptions (there are none)
+			TypeBinding ptb = lrMethod.getParameterTypeBinding();
+			if (ptb==null) {
+				method.parameters = Binding.NO_PARAMETERS;
+			} else {
+				method.parameters = new TypeBinding[]{ptb};
+			}
+			method.returnType = lrMethod.getReturnTypeBinding();
+			method.modifiers &= ~ExtraCompilerModifiers.AccUnresolved;
+			return method;
+		}
+		// returning null is what this clause would have done anyway
+		return null;
+	}
+	// FIXASC - end
+
+	TypeParameter[] typeParameters = methodDecl.typeParameters();
+	if (typeParameters != null) {
+		methodDecl.scope.connectTypeVariables(typeParameters, true);
+		// Perform deferred bound checks for type variables (only done after type variable hierarchy is connected)
+		for (int i = 0, paramLength = typeParameters.length; i < paramLength; i++)
+			typeParameters[i].checkBounds(methodDecl.scope);
+	}
+	TypeReference[] exceptionTypes = methodDecl.thrownExceptions;
+	if (exceptionTypes != null) {
+		int size = exceptionTypes.length;
+		method.thrownExceptions = new ReferenceBinding[size];
+		int count = 0;
+		ReferenceBinding resolvedExceptionType;
+		for (int i = 0; i < size; i++) {
+			resolvedExceptionType = (ReferenceBinding) exceptionTypes[i].resolveType(methodDecl.scope, true /* check bounds*/);
+			if (resolvedExceptionType == null)
+				continue;
+			if (resolvedExceptionType.isBoundParameterizedType()) {
+				methodDecl.scope.problemReporter().invalidParameterizedExceptionType(resolvedExceptionType, exceptionTypes[i]);
+				continue;
+			}
+			if (resolvedExceptionType.findSuperTypeOriginatingFrom(TypeIds.T_JavaLangThrowable, true) == null) {
+				if (resolvedExceptionType.isValidBinding()) {
+					methodDecl.scope.problemReporter().cannotThrowType(exceptionTypes[i], resolvedExceptionType);
+					continue;
+				}
+			}
+			if ((resolvedExceptionType.tagBits & TagBits.HasMissingType) != 0) {
+				method.tagBits |= TagBits.HasMissingType;
+			}
+			method.modifiers |= (resolvedExceptionType.modifiers & ExtraCompilerModifiers.AccGenericSignature);
+			method.thrownExceptions[count++] = resolvedExceptionType;
+		}
+		if (count < size)
+			System.arraycopy(method.thrownExceptions, 0, method.thrownExceptions = new ReferenceBinding[count], 0, count);
+	}
+>>>>>>> patch
 	final boolean reportUnavoidableGenericTypeProblems = this.scope.compilerOptions().reportUnavoidableGenericTypeProblems;
 	boolean foundArgProblem = false;
 	Argument[] arguments = methodDecl.arguments;
@@ -1586,6 +1901,7 @@ public MethodBinding resolveTypesFor(MethodBinding method) {
 					returnType.bits &= ~ASTNode.IgnoreRawTypeCheck;
 				}
 			}
+<<<<<<< HEAD
 			if (methodType == null) {
 				foundReturnTypeProblem = true;
 			} else if (methodType.isArrayType() && ((ArrayBinding) methodType).leafComponentType == TypeBinding.VOID) {
@@ -1630,6 +1946,43 @@ private void createArgumentBindings(MethodBinding method) {
 		getPackage().isViewedAsDeprecated(); // initialize annotations
 		this.nullnessDefaultInitialized = 2;
 	}
+=======
+			if (methodType == null) {
+				foundReturnTypeProblem = true;
+			} else {
+				if ((methodType.tagBits & TagBits.HasMissingType) != 0) {
+					method.tagBits |= TagBits.HasMissingType;
+				}
+				method.returnType = methodType;
+				TypeBinding leafType = methodType.leafComponentType();
+				if (leafType instanceof ReferenceBinding && (((ReferenceBinding) leafType).modifiers & ExtraCompilerModifiers.AccGenericSignature) != 0)
+					method.modifiers |= ExtraCompilerModifiers.AccGenericSignature;
+			}
+		}
+	}
+	if (foundArgProblem) {
+		methodDecl.binding = null;
+		method.parameters = Binding.NO_PARAMETERS; // see 107004
+		// nullify type parameter bindings as well as they have a backpointer to the method binding
+		// (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=81134)
+		if (typeParameters != null)
+			for (int i = 0, length = typeParameters.length; i < length; i++)
+				typeParameters[i].binding = null;
+		return null;
+	}
+	CompilerOptions compilerOptions = this.scope.compilerOptions();
+	if (compilerOptions.isAnnotationBasedNullAnalysisEnabled) {
+		createArgumentBindings(method, compilerOptions); // need annotations resolved already at this point
+	}
+	if (foundReturnTypeProblem)
+		return method; // but its still unresolved with a null return type & is still connected to its method declaration
+
+	method.modifiers &= ~ExtraCompilerModifiers.AccUnresolved;
+	return method;
+}
+private void createArgumentBindings(MethodBinding method, CompilerOptions compilerOptions) {
+	initializeNullDefault();
+>>>>>>> patch
 	AbstractMethodDeclaration methodDecl = method.sourceMethod();
 	if (methodDecl != null) {
 		if (method.parameters != Binding.NO_PARAMETERS)
@@ -1785,6 +2138,7 @@ public ReferenceBinding superclass() {
 public ReferenceBinding[] superInterfaces() {
 	return this.superInterfaces;
 }
+
 public SyntheticMethodBinding[] syntheticMethods() {
 	if (this.synthetics == null 
 			|| this.synthetics[SourceTypeBinding.METHOD_EMUL] == null 

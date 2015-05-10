@@ -1,5 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
+<<<<<<< HEAD
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -76,6 +77,88 @@ public class SourceMapper
 	extends ReferenceInfoAdapter
 	implements ISourceElementRequestor, SuffixConstants {
 
+=======
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Kelly Campbell <kellyc@google.com> - Hangs in SourceMapper during java proposals - https://bugs.eclipse.org/bugs/show_bug.cgi?id=281575
+ *     Stephan Herrmann - Contribution for Bug 380048 - error popup when navigating to source files
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core;
+// GROOVY PATCHED
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
+import org.eclipse.core.resources.IContainer;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.Flags;
+import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.jdt.core.IField;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IMember;
+import org.eclipse.jdt.core.IMethod;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.core.ISourceRange;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.ITypeParameter;
+import org.eclipse.jdt.core.JavaConventions;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.Signature;
+import org.eclipse.jdt.core.SourceRange;
+import org.eclipse.jdt.core.compiler.CategorizedProblem;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.ISourceElementRequestor;
+import org.eclipse.jdt.internal.compiler.SourceElementParser;
+import org.eclipse.jdt.internal.compiler.ast.Expression;
+import org.eclipse.jdt.internal.compiler.ast.ImportReference;
+import org.eclipse.jdt.internal.compiler.env.IBinaryType;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jdt.internal.core.util.ReferenceInfoAdapter;
+
+/**
+ * A SourceMapper maps source code in a ZIP file to binary types in
+ * a JAR. The SourceMapper uses the fuzzy parser to identify source
+ * fragments in a .java file, and attempts to match the source code
+ * with children in a binary type. A SourceMapper is associated
+ * with a JarPackageFragment by an AttachSourceOperation.
+ *
+ * @see org.eclipse.jdt.internal.core.JarPackageFragment
+ */
+public class SourceMapper
+	extends ReferenceInfoAdapter
+	implements ISourceElementRequestor, SuffixConstants {
+
+>>>>>>> patch
 	public static class LocalVariableElementKey {
 		String parent;
 		String name;
@@ -366,6 +449,7 @@ public class SourceMapper
 		this.parameterNames = null;
 		this.parametersRanges = null;
 		this.finalParameters = null;
+<<<<<<< HEAD
 	}
 
 	/**
@@ -829,6 +913,500 @@ public class SourceMapper
 							typeParameterInfo.nameSourceEnd - typeParameterInfo.nameSourceStart + 1));
 				}
 			}
+=======
+	}
+
+	/**
+	 * NOT API, public only for access by Unit tests.
+	 * Converts these type names to unqualified signatures. This needs to be done in order to be consistent
+	 * with the way the source range is retrieved.
+	 * @see SourceMapper#getUnqualifiedMethodHandle
+	 * @see Signature
+	 */
+	public String[] convertTypeNamesToSigs(char[][] typeNames) {
+		if (typeNames == null)
+			return CharOperation.NO_STRINGS;
+		int n = typeNames.length;
+		if (n == 0)
+			return CharOperation.NO_STRINGS;
+		String[] typeSigs = new String[n];
+		for (int i = 0; i < n; ++i) {
+			char[] typeSig = Signature.createCharArrayTypeSignature(typeNames[i], false);
+
+			// transforms signatures that contains a qualification into unqualified signatures
+			// e.g. "QX<+QMap.Entry;>;" becomes "QX<+QEntry;>;"
+			StringBuffer simpleTypeSig = null;
+			int start = 0;
+			int dot = -1;
+			int length = typeSig.length;
+			for (int j = 0; j < length; j++) {
+				switch (typeSig[j]) {
+					case Signature.C_UNRESOLVED:
+						if (simpleTypeSig != null)
+							simpleTypeSig.append(typeSig, start, j-start);
+						start = j;
+						break;
+					case Signature.C_DOT:
+						dot = j;
+						break;
+					case Signature.C_GENERIC_START:
+						int matchingEnd = findMatchingGenericEnd(typeSig, j+1);
+						if (matchingEnd > 0 && matchingEnd+1 < length && typeSig[matchingEnd+1] == Signature.C_DOT) {
+							// found Head<Param>.Tail -> discard everything except Tail
+							if (simpleTypeSig == null)
+								simpleTypeSig = new StringBuffer().append(typeSig, 0, start);
+							simpleTypeSig.append(Signature.C_UNRESOLVED);
+							start = j = matchingEnd+2;
+							break;
+						}
+						//$FALL-THROUGH$
+					case Signature.C_NAME_END:
+						if (dot > start) {
+							if (simpleTypeSig == null)
+								simpleTypeSig = new StringBuffer().append(typeSig, 0, start);
+							simpleTypeSig.append(Signature.C_UNRESOLVED);
+							simpleTypeSig.append(typeSig, dot+1, j-dot-1);
+							start = j;
+						}
+						break;
+				}
+			}
+			if (simpleTypeSig == null) {
+				typeSigs[i] = new String(typeSig);
+			} else {
+				simpleTypeSig.append(typeSig, start, length-start);
+				typeSigs[i] = simpleTypeSig.toString();
+			}
+		}
+		return typeSigs;
+	}
+
+	private int findMatchingGenericEnd(char[] sig, int start) {
+		int nesting = 0;
+		int length = sig.length;
+		for (int i=start; i < length; i++) {
+			switch (sig[i]) {
+				case Signature.C_GENERIC_START:
+					nesting++;
+					break;
+				case Signature.C_GENERIC_END:
+					if (nesting == 0)
+						return i;
+					nesting--;
+					break;
+			}
+		}
+		return -1;
+	}
+
+	private synchronized void computeAllRootPaths(IType type) {
+		if (this.areRootPathsComputed) {
+			return;
+		}
+		IPackageFragmentRoot root = (IPackageFragmentRoot) type.getPackageFragment().getParent();
+		IPath pkgFragmentRootPath = root.getPath();
+		final HashSet tempRoots = new HashSet();
+		long time = 0;
+		if (VERBOSE) {
+			System.out.println("compute all root paths for " + root.getElementName()); //$NON-NLS-1$
+			time = System.currentTimeMillis();
+		}
+		final HashSet firstLevelPackageNames = new HashSet();
+		boolean containsADefaultPackage = false;
+		boolean containsJavaSource = !pkgFragmentRootPath.equals(this.sourcePath); // used to optimize zip file reading only if source path and root path are equals, otherwise assume that attachment contains Java source
+
+		String sourceLevel = null;
+		String complianceLevel = null;
+		if (root.isArchive()) {
+			JavaModelManager manager = JavaModelManager.getJavaModelManager();
+			ZipFile zip = null;
+			try {
+				zip = manager.getZipFile(pkgFragmentRootPath);
+				for (Enumeration entries = zip.entries(); entries.hasMoreElements(); ) {
+					ZipEntry entry = (ZipEntry) entries.nextElement();
+					String entryName = entry.getName();
+					if (!entry.isDirectory()) {
+						if (Util.isClassFileName(entryName)) {
+							int index = entryName.indexOf('/');
+							if (index != -1) {
+								String firstLevelPackageName = entryName.substring(0, index);
+								if (!firstLevelPackageNames.contains(firstLevelPackageName)) {
+									if (sourceLevel == null) {
+										IJavaProject project = root.getJavaProject();
+										sourceLevel = project.getOption(JavaCore.COMPILER_SOURCE, true);
+										complianceLevel = project.getOption(JavaCore.COMPILER_COMPLIANCE, true);
+									}
+									IStatus status = JavaConventions.validatePackageName(firstLevelPackageName, sourceLevel, complianceLevel);
+									if (status.isOK() || status.getSeverity() == IStatus.WARNING) {
+										firstLevelPackageNames.add(firstLevelPackageName);
+									}
+								}
+							} else {
+								containsADefaultPackage = true;
+							}
+						} else if (!containsJavaSource && org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(entryName)) {
+							containsJavaSource = true;
+						}
+					}
+				}
+			} catch (CoreException e) {
+				// ignore
+			} finally {
+				manager.closeZipFile(zip); // handle null case
+			}
+		} else {
+			Object target = JavaModel.getTarget(root.getPath(), true);
+			if (target instanceof IResource) {
+				IResource resource = (IResource) target;
+				if (resource instanceof IContainer) {
+					try {
+						IResource[] members = ((IContainer) resource).members();
+						for (int i = 0, max = members.length; i < max; i++) {
+							IResource member = members[i];
+							String resourceName = member.getName();
+							if (member.getType() == IResource.FOLDER) {
+								if (sourceLevel == null) {
+									IJavaProject project = root.getJavaProject();
+									sourceLevel = project.getOption(JavaCore.COMPILER_SOURCE, true);
+									complianceLevel = project.getOption(JavaCore.COMPILER_COMPLIANCE, true);
+								}
+								IStatus status = JavaConventions.validatePackageName(resourceName, sourceLevel, complianceLevel);
+								if (status.isOK() || status.getSeverity() == IStatus.WARNING) {
+									firstLevelPackageNames.add(resourceName);
+								}
+							} else if (Util.isClassFileName(resourceName)) {
+								containsADefaultPackage = true;
+							} else if (!containsJavaSource && org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(resourceName)) {
+								containsJavaSource = true;
+							}
+						}
+					} catch (CoreException e) {
+						// ignore
+					}
+				}
+			}
+		}
+
+		if (containsJavaSource) { // no need to read source attachment if it contains no Java source (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=190840 )
+			Object target = JavaModel.getTarget(this.sourcePath, true);
+			if (target instanceof IContainer) {
+				IContainer folder = (IContainer)target;
+				computeRootPath(folder, firstLevelPackageNames, containsADefaultPackage, tempRoots, folder.getFullPath().segmentCount()/*if external folder, this is the linked folder path*/);
+			} else {
+				JavaModelManager manager = JavaModelManager.getJavaModelManager();
+				ZipFile zip = null;
+				try {
+					zip = manager.getZipFile(this.sourcePath);
+					for (Enumeration entries = zip.entries(); entries.hasMoreElements(); ) {
+						ZipEntry entry = (ZipEntry) entries.nextElement();
+						String entryName;
+						if (!entry.isDirectory() && org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(entryName = entry.getName())) {
+							IPath path = new Path(entryName);
+							int segmentCount = path.segmentCount();
+							if (segmentCount > 1) {
+								for (int i = 0, max = path.segmentCount() - 1; i < max; i++) {
+									if (firstLevelPackageNames.contains(path.segment(i))) {
+										tempRoots.add(path.uptoSegment(i));
+										// don't break here as this path could contain other first level package names (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=74014)
+									}
+									if (i == max - 1 && containsADefaultPackage) {
+										tempRoots.add(path.uptoSegment(max));
+									}
+								}
+							} else if (containsADefaultPackage) {
+								tempRoots.add(new Path("")); //$NON-NLS-1$
+							}
+						}
+					}
+				} catch (CoreException e) {
+					// ignore
+				} finally {
+					manager.closeZipFile(zip); // handle null case
+				}
+			}
+		}
+		int size = tempRoots.size();
+		if (this.rootPaths != null) {
+			for (Iterator iterator = this.rootPaths.iterator(); iterator.hasNext(); ) {
+				tempRoots.add(new Path((String) iterator.next()));
+			}
+			this.rootPaths.clear();
+		} else {
+			this.rootPaths = new ArrayList(size);
+		}
+		size = tempRoots.size();
+		if (size > 0) {
+			ArrayList sortedRoots = new ArrayList(tempRoots);
+			if (size > 1) {
+				Collections.sort(sortedRoots, new Comparator() {
+					public int compare(Object o1, Object o2) {
+						IPath path1 = (IPath) o1;
+						IPath path2 = (IPath) o2;
+						return path1.segmentCount() - path2.segmentCount();
+					}
+				});
+			}
+			for (Iterator iter = sortedRoots.iterator(); iter.hasNext();) {
+				IPath path = (IPath) iter.next();
+				this.rootPaths.add(path.toString());
+			}
+		}
+		this.areRootPathsComputed = true;
+		if (VERBOSE) {
+			System.out.println("Spent " + (System.currentTimeMillis() - time) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
+			System.out.println("Found " + size + " root paths");	//$NON-NLS-1$ //$NON-NLS-2$
+			int i = 0;
+			for (Iterator iterator = this.rootPaths.iterator(); iterator.hasNext();) {
+				System.out.println("root[" + i + "]=" + ((String) iterator.next()));//$NON-NLS-1$ //$NON-NLS-2$
+				i++;
+			}
+		}
+	}
+
+	private void computeRootPath(IContainer container, HashSet firstLevelPackageNames, boolean hasDefaultPackage, Set set, int sourcePathSegmentCount) {
+		try {
+			IResource[] resources = container.members();
+			for (int i = 0, max = resources.length; i < max; i++) {
+				IResource resource = resources[i];
+				if (resource.getType() == IResource.FOLDER) {
+					if (firstLevelPackageNames.contains(resource.getName())) {
+						IPath fullPath = container.getFullPath();
+						IPath rootPathEntry = fullPath.removeFirstSegments(sourcePathSegmentCount).setDevice(null);
+						if (rootPathEntry.segmentCount() >= 1) {
+							set.add(rootPathEntry);
+						}
+						computeRootPath((IFolder) resource, firstLevelPackageNames, hasDefaultPackage, set, sourcePathSegmentCount);
+					} else {
+						computeRootPath((IFolder) resource, firstLevelPackageNames, hasDefaultPackage, set, sourcePathSegmentCount);
+					}
+				}
+				if (i == max - 1 && hasDefaultPackage) {
+					// check if one member is a .java file
+					boolean hasJavaSourceFile = false;
+					for (int j = 0; j < max; j++) {
+						if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(resources[i].getName())) {
+							hasJavaSourceFile = true;
+							break;
+						}
+					}
+					if (hasJavaSourceFile) {
+						IPath fullPath = container.getFullPath();
+						IPath rootPathEntry = fullPath.removeFirstSegments(sourcePathSegmentCount).setDevice(null);
+						set.add(rootPathEntry);
+					}
+				}
+			}
+		} catch (CoreException e) {
+			// ignore
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterType(TypeInfo typeInfo) {
+
+		this.typeDepth++;
+		if (this.typeDepth == this.types.length) { // need to grow
+			System.arraycopy(
+				this.types,
+				0,
+				this.types = new IType[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.typeNameRanges,
+				0,
+				this.typeNameRanges = new SourceRange[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.typeDeclarationStarts,
+				0,
+				this.typeDeclarationStarts = new int[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.memberName,
+				0,
+				this.memberName = new String[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.memberDeclarationStart,
+				0,
+				this.memberDeclarationStart = new int[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.memberNameRange,
+				0,
+				this.memberNameRange = new SourceRange[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.methodParameterTypes,
+				0,
+				this.methodParameterTypes = new char[this.typeDepth * 2][][],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.methodParameterNames,
+				0,
+				this.methodParameterNames = new char[this.typeDepth * 2][][],
+				0,
+				this.typeDepth);
+			System.arraycopy(
+				this.typeModifiers,
+				0,
+				this.typeModifiers = new int[this.typeDepth * 2],
+				0,
+				this.typeDepth);
+		}
+		if (typeInfo.name.length == 0) {
+			this.anonymousCounter++;
+			if (this.anonymousCounter == this.anonymousClassName) {
+				this.types[this.typeDepth] = getType(this.binaryType.getElementName());
+			} else {
+				this.types[this.typeDepth] = getType(new String(typeInfo.name));
+			}
+		} else {
+			this.types[this.typeDepth] = getType(new String(typeInfo.name));
+		}
+		this.typeNameRanges[this.typeDepth] =
+			new SourceRange(typeInfo.nameSourceStart, typeInfo.nameSourceEnd - typeInfo.nameSourceStart + 1);
+		this.typeDeclarationStarts[this.typeDepth] = typeInfo.declarationStart;
+
+		IType currentType = this.types[this.typeDepth];
+
+		// type parameters
+		if (typeInfo.typeParameters != null) {
+			for (int i = 0, length = typeInfo.typeParameters.length; i < length; i++) {
+				TypeParameterInfo typeParameterInfo = typeInfo.typeParameters[i];
+				ITypeParameter typeParameter = currentType.getTypeParameter(new String(typeParameterInfo.name));
+				setSourceRange(
+					typeParameter,
+					new SourceRange(
+						typeParameterInfo.declarationStart,
+						typeParameterInfo.declarationEnd - typeParameterInfo.declarationStart + 1),
+					new SourceRange(
+						typeParameterInfo.nameSourceStart,
+						typeParameterInfo.nameSourceEnd - typeParameterInfo.nameSourceStart + 1));
+			}
+		}
+
+		// type modifiers
+		this.typeModifiers[this.typeDepth] = typeInfo.modifiers;
+
+		// categories
+		addCategories(currentType, typeInfo.categories);
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterCompilationUnit() {
+		// do nothing
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterConstructor(MethodInfo methodInfo) {
+		enterAbstractMethod(methodInfo);
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterField(FieldInfo fieldInfo) {
+		if (this.typeDepth >= 0) {
+			this.memberDeclarationStart[this.typeDepth] = fieldInfo.declarationStart;
+			this.memberNameRange[this.typeDepth] =
+				new SourceRange(fieldInfo.nameSourceStart, fieldInfo.nameSourceEnd - fieldInfo.nameSourceStart + 1);
+			String fieldName = new String(fieldInfo.name);
+			this.memberName[this.typeDepth] = fieldName;
+
+			// categories
+			IType currentType = this.types[this.typeDepth];
+			IField field = currentType.getField(fieldName);
+			addCategories(field, fieldInfo.categories);
+		}
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterInitializer(
+		int declarationSourceStart,
+		int modifiers) {
+		//do nothing
+	}
+
+	/**
+	 * @see ISourceElementRequestor
+	 */
+	public void enterMethod(MethodInfo methodInfo) {
+		enterAbstractMethod(methodInfo);
+	}
+	private void enterAbstractMethod(MethodInfo methodInfo) {
+		if (this.typeDepth >= 0) {
+			this.memberName[this.typeDepth] = new String(methodInfo.name);
+			this.memberNameRange[this.typeDepth] =
+				new SourceRange(methodInfo.nameSourceStart, methodInfo.nameSourceEnd - methodInfo.nameSourceStart + 1);
+			this.memberDeclarationStart[this.typeDepth] = methodInfo.declarationStart;
+			IType currentType = this.types[this.typeDepth];
+			int currenTypeModifiers = this.typeModifiers[this.typeDepth];
+			char[][] parameterTypes = methodInfo.parameterTypes;
+			if (methodInfo.isConstructor && currentType.getDeclaringType() != null && !Flags.isStatic(currenTypeModifiers)) {
+				IType declaringType = currentType.getDeclaringType();
+				String declaringTypeName = declaringType.getElementName();
+				if (declaringTypeName.length() == 0) {
+					IClassFile classFile = declaringType.getClassFile();
+					int length = parameterTypes != null ? parameterTypes.length : 0;
+					char[][] newParameterTypes = new char[length+1][];
+					declaringTypeName = classFile.getElementName();
+					declaringTypeName = declaringTypeName.substring(0, declaringTypeName.indexOf('.'));
+					newParameterTypes[0] = declaringTypeName.toCharArray();
+					if (length != 0) {
+						System.arraycopy(parameterTypes, 0, newParameterTypes, 1, length);
+					}
+					this.methodParameterTypes[this.typeDepth] = newParameterTypes;
+				} else {
+					int length = parameterTypes != null ? parameterTypes.length : 0;
+					char[][] newParameterTypes = new char[length+1][];
+					newParameterTypes[0] = declaringTypeName.toCharArray();
+					if (length != 0) {
+						System.arraycopy(parameterTypes, 0, newParameterTypes, 1, length);
+					}
+					this.methodParameterTypes[this.typeDepth] = newParameterTypes;
+				}
+			} else {
+				this.methodParameterTypes[this.typeDepth] = parameterTypes;
+			}
+			this.methodParameterNames[this.typeDepth] = methodInfo.parameterNames;
+
+			IMethod method = currentType.getMethod(
+					this.memberName[this.typeDepth],
+					convertTypeNamesToSigs(this.methodParameterTypes[this.typeDepth]));
+
+			// type parameters
+			if (methodInfo.typeParameters != null) {
+				for (int i = 0, length = methodInfo.typeParameters.length; i < length; i++) {
+					TypeParameterInfo typeParameterInfo = methodInfo.typeParameters[i];
+					ITypeParameter typeParameter = method.getTypeParameter(new String(typeParameterInfo.name));
+					setSourceRange(
+						typeParameter,
+						new SourceRange(
+							typeParameterInfo.declarationStart,
+							typeParameterInfo.declarationEnd - typeParameterInfo.declarationStart + 1),
+						new SourceRange(
+							typeParameterInfo.nameSourceStart,
+							typeParameterInfo.nameSourceEnd - typeParameterInfo.nameSourceStart + 1));
+				}
+			}
+>>>>>>> patch
 			// parameters infos
 			if (methodInfo.parameterInfos != null) {
 				for (int i = 0, length = methodInfo.parameterInfos.length; i < length; i++) {
@@ -1118,7 +1696,7 @@ public class SourceMapper
 					return UNKNOWN_RANGE;
 				} else {
 					return ranges[1];
-				}
+		}
 		}
 		SourceRange[] ranges = (SourceRange[]) this.sourceRanges.get(element);
 		if (ranges == null) {
@@ -1397,7 +1975,12 @@ public class SourceMapper
 				}
 			}
 			boolean doFullParse = hasToRetrieveSourceRangesForLocalClass(fullName);
-			parser = new SourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals*/);
+	        // GROOVY start
+	        /* old {
+			parser = new SourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals..);
+	        } new */
+			parser = LanguageSupportFactory.getSourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals*/, true);
+	        // GROOVY end
 			parser.javadocParser.checkDocComment = false; // disable javadoc parsing
 			IJavaElement javaElement = this.binaryType.getCompilationUnit();
 			if (javaElement == null) javaElement = this.binaryType.getParent();
@@ -1405,6 +1988,17 @@ public class SourceMapper
 				new BasicCompilationUnit(contents, null, this.binaryType.sourceFileName(info), javaElement),
 				doFullParse,
 				null/*no progress*/);
+			// GROOVY start
+	        // if this is an interesting file in an interesting project,
+			// then filter out all binary members that do not have a direct
+			// mapping to the source
+			IProject project = javaElement.getJavaProject().getProject();
+			if (LanguageSupportFactory.isInterestingProject(project) && 
+					LanguageSupportFactory.isInterestingSourceFile(this.binaryType.getSourceFileName(info))) {
+				LanguageSupportFactory.filterNonSourceMembers(this.binaryType);
+			}
+			
+			// GROOVY end
 			if (elementToFind != null) {
 				ISourceRange range = getNameRange(elementToFind);
 				return range;

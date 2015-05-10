@@ -13,6 +13,7 @@
  *								bug 365531 - [compiler][null] investigate alternative strategy for internally encoding nullness defaults
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
+// GROOVY PATCHED
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +91,6 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 
 	static final ProblemPackageBinding TheNotFoundPackage = new ProblemPackageBinding(CharOperation.NO_CHAR, NotFound);
 	static final ProblemReferenceBinding TheNotFoundType = new ProblemReferenceBinding(CharOperation.NO_CHAR_CHAR, null, NotFound);
-
 
 public LookupEnvironment(ITypeRequestor typeRequestor, CompilerOptions globalOptions, ProblemReporter problemReporter, INameEnvironment nameEnvironment) {
 	this.typeRequestor = typeRequestor;
@@ -172,7 +172,12 @@ ReferenceBinding askForType(PackageBinding packageBinding, char[] name) {
 * NOTE: This method can be called multiple times as additional source files are needed
 */
 public void buildTypeBindings(CompilationUnitDeclaration unit, AccessRestriction accessRestriction) {
+	// GROOVY start
+	/* old {
 	CompilationUnitScope scope = new CompilationUnitScope(unit, this);
+	} new */
+	CompilationUnitScope scope = unit.buildCompilationUnitScope(this);
+	// GROOVY end
 	scope.buildTypeBindings(accessRestriction);
 	int unitsLength = this.units.length;
 	if (++this.lastUnitIndex >= unitsLength)
@@ -212,9 +217,14 @@ public void completeTypeBindings() {
 
 	for (int i = this.lastCompletedUnitIndex + 1; i <= this.lastUnitIndex; i++) {
 	    (this.unitBeingCompleted = this.units[i]).scope.connectTypeHierarchy();
+		// GROOVY start: extra step, augment type hierarchy, may bring in GroovyObject as source (if in groovycore) and that
+	    // will then need its type hierarchy connecting
+	    (this.unitBeingCompleted = this.units[i]).scope.augmentTypeHierarchy();
+		// GROOVY end
 	}
 	this.stepCompleted = CONNECT_TYPE_HIERARCHY;
 
+	// FIXASC doesn't this sometimes bring MetaClass/MOP in that need hierarchy connecting? (see 30-Jun comments)
 	for (int i = this.lastCompletedUnitIndex + 1; i <= this.lastUnitIndex; i++) {
 		CompilationUnitScope unitScope = (this.unitBeingCompleted = this.units[i]).scope;
 		unitScope.checkParameterizedTypes();
@@ -1223,7 +1233,7 @@ private ReferenceBinding getTypeFromCompoundName(char[][] compoundName, boolean 
 			 * misconfiguration now that did not also exist in some equivalent form while producing the class files which encode 
 			 * these missing types. So no need to bark again. Note that wasMissingType == true signals a type referenced in a .class 
 			 * file which could not be found when the binary was produced. See https://bugs.eclipse.org/bugs/show_bug.cgi?id=364450 */
-			this.problemReporter.isClassPathCorrect(compoundName, this.unitBeingCompleted, this.missingClassFileLocation);
+		this.problemReporter.isClassPathCorrect(compoundName, this.unitBeingCompleted, this.missingClassFileLocation);
 		}
 		// create a proxy for the missing BinaryType
 		binding = createMissingType(null, compoundName);
@@ -1475,6 +1485,7 @@ public void reset() {
 	this.uniqueGetClassMethodBinding = null;
 	this.missingTypes = null;
 	this.typesBeingConnected = new HashSet();
+<<<<<<< HEAD
 
 	for (int i = this.units.length; --i >= 0;)
 		this.units[i] = null;
@@ -1530,3 +1541,72 @@ void updateCaches(UnresolvedReferenceBinding unresolvedType, ReferenceBinding re
 	}
 }
 }
+=======
+
+	for (int i = this.units.length; --i >= 0;)
+		this.units[i] = null;
+	this.lastUnitIndex = -1;
+	this.lastCompletedUnitIndex = -1;
+	this.unitBeingCompleted = null; // in case AbortException occurred
+
+	this.classFilePool.reset();
+	// name environment has a longer life cycle, and must be reset in
+	// the code which created it.
+}
+
+/**
+ * Associate a given type with some access restriction
+ * (did not store the restriction directly into binding, since sparse information)
+ */
+public void setAccessRestriction(ReferenceBinding type, AccessRestriction accessRestriction) {
+	if (accessRestriction == null) return;
+	type.modifiers |= ExtraCompilerModifiers.AccRestrictedAccess;
+	this.accessRestrictions.put(type, accessRestriction);
+}
+
+void updateCaches(UnresolvedReferenceBinding unresolvedType, ReferenceBinding resolvedType) {
+	// walk all the unique collections & replace the unresolvedType with the resolvedType
+	// must prevent 2 entries so == still works (1 containing the unresolvedType and the other containing the resolvedType)
+	if (this.uniqueParameterizedTypeBindings.get(unresolvedType) != null) { // update the key
+		Object[] keys = this.uniqueParameterizedTypeBindings.keyTable;
+		for (int i = 0, l = keys.length; i < l; i++) {
+			if (keys[i] == unresolvedType) {
+				keys[i] = resolvedType; // hashCode is based on compoundName so this works - cannot be raw since type of parameterized type
+				break;
+			}
+		}
+	}
+	if (this.uniqueRawTypeBindings.get(unresolvedType) != null) { // update the key
+		Object[] keys = this.uniqueRawTypeBindings.keyTable;
+		for (int i = 0, l = keys.length; i < l; i++) {
+			if (keys[i] == unresolvedType) {
+				keys[i] = resolvedType; // hashCode is based on compoundName so this works
+				break;
+			}
+		}
+	}
+	if (this.uniqueWildcardBindings.get(unresolvedType) != null) { // update the key
+		Object[] keys = this.uniqueWildcardBindings.keyTable;
+		for (int i = 0, l = keys.length; i < l; i++) {
+			if (keys[i] == unresolvedType) {
+				keys[i] = resolvedType; // hashCode is based on compoundName so this works
+				break;
+			}
+		}
+	}
+}
+
+public IQualifiedTypeResolutionListener[] resolutionListeners = new IQualifiedTypeResolutionListener[0];
+
+public void addResolutionListener(IQualifiedTypeResolutionListener resolutionListener) {
+	int length = this.resolutionListeners.length;
+	for (int i = 0; i < length; i++){
+		if (this.resolutionListeners[i].equals(resolutionListener))
+			return;
+	}
+	System.arraycopy(this.resolutionListeners, 0,
+			this.resolutionListeners = new IQualifiedTypeResolutionListener[length + 1], 0, length);
+	this.resolutionListeners[length] = resolutionListener;
+}
+}
+>>>>>>> patch

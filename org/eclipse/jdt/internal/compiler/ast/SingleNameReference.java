@@ -7,8 +7,18 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+<<<<<<< HEAD
  *     Stephan Herrmann <stephan@cs.tu-berlin.de> - Contribution for bug 292478 - Report potentially null across variable assignment,
  *     											    Contribution for bug 185682 - Increment/decrement operators mark local variables as read
+=======
+ *     Stephan Herrmann <stephan@cs.tu-berlin.de> - Contributions for
+ *								bug 292478 - Report potentially null across variable assignment,
+ *								bug 185682 - Increment/decrement operators mark local variables as read
+ *								bug 331649 - [compiler][null] consider null annotations for fields
+ *								bug 383368 - [compiler][null] syntactic null analysis for field references
+ *     Jesper S Moller <jesper@selskabet.org> - Contributions for
+ *								bug 378674 - "The method can be declared as static" is wrong
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
@@ -118,10 +128,16 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 				} else {
 					currentScope.problemReporter().cannotAssignToFinalField(fieldBinding, this);
 				}
+<<<<<<< HEAD
 			}
 			if (!fieldBinding.isStatic()) {
 				// https://bugs.eclipse.org/bugs/show_bug.cgi?id=318682
 				currentScope.resetDeclaringClassMethodStaticFlag(fieldBinding.declaringClass);
+=======
+			} else if (!isCompound && fieldBinding.isNonNull()) {
+				// record assignment for detecting uninitialized non-null fields:
+				flowInfo.markAsDefinitelyAssigned(fieldBinding);
+>>>>>>> patch
 			}
 			break;
 		case Binding.LOCAL : // assigning to a local variable

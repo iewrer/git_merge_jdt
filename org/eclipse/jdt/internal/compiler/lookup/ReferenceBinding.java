@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -7,12 +8,24 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+>>>>>>> patch
  *     Stephan Herrmann - Contributions for
  *								bug 349326 - [1.7] new warning for missing try-with-resources
  *								bug 186342 - [compiler][null] Using annotations for null checking
  *								bug 365519 - editorial cleanup after bug 186342 and bug 365387
  *								bug 358903 - Filter practically unimportant resource leak warnings
  *								bug 365531 - [compiler][null] investigate alternative strategy for internally encoding nullness defaults
+<<<<<<< HEAD
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -47,6 +60,47 @@ abstract public class ReferenceBinding extends TypeBinding {
 
 	private SimpleLookupTable compatibleCache;
 
+=======
+ *								bug 388281 - [compiler][null] inheritance of null annotations as an option
+ *								bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
+ *								bug 400421 - [compiler] Null analysis for fields does not take @com.google.inject.Inject into account
+ *								bug 382069 - [null] Make the null analysis consider JUnit's assertNotNull similarly to assertions
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler.lookup;
+// GROOVY PATCHED
+
+import java.util.Arrays;
+import java.util.Comparator;
+
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
+
+/*
+Not all fields defined by this type (& its subclasses) are initialized when it is created.
+Some are initialized only when needed.
+
+Accessors have been provided for some public fields so all TypeBindings have the same API...
+but access public fields directly whenever possible.
+Non-public fields have accessors which should be used everywhere you expect the field to be initialized.
+
+null is NOT a valid value for a non-public field... it just means the field is not initialized.
+*/
+
+abstract public class ReferenceBinding extends TypeBinding {
+
+	public char[][] compoundName;
+	public char[] sourceName;
+	public int modifiers;
+	public PackageBinding fPackage;
+	char[] fileName;
+	char[] constantPoolName;
+	char[] signature;
+
+	private SimpleLookupTable compatibleCache;
+
+>>>>>>> patch
 	int typeBits; // additional bits characterizing this type
 
 	public static final ReferenceBinding LUB_GENERIC = new ReferenceBinding() { /* used for lub computation */
@@ -287,6 +341,11 @@ public final boolean canBeSeenBy(ReferenceBinding receiverType, ReferenceBinding
  * Answer true if the receiver is visible to the type provided by the scope.
  */
 public final boolean canBeSeenBy(Scope scope) {
+	// GROOVY start
+	if (scope.compilationUnitScope()!=null && scope.compilationUnitScope().canSeeEverything()) {
+		return true;
+	}
+	// GROOVY end
 	if (isPublic()) return true;
 
 	SourceTypeBinding invocationType = scope.enclosingSourceType();
@@ -373,6 +432,7 @@ public char[] computeGenericTypeSignature(TypeVariableBinding[] typeVariables) {
 public void computeId() {
 	// note that more (configurable) ids are assigned from PackageBinding#checkIfNullAnnotationType() 
 
+<<<<<<< HEAD
 	// try to avoid multiple checks against a package/type name
 	switch (this.compoundName.length) {
 
@@ -390,10 +450,54 @@ public void computeId() {
 					case 'i' :
 						if (CharOperation.equals(packageName, TypeConstants.IO)) {
 							switch (typeName[0]) {
+=======
+	// try to avoid multiple checks against a package/type name
+	switch (this.compoundName.length) {
+
+		case 3 :
+			char[] packageName = this.compoundName[0];
+			// expect only java.*.* and javax.*.* and junit.*.* and org.junit.*
+			switch (packageName.length) {
+				case 3: // only one type in this group, yet:
+					if (CharOperation.equals(TypeConstants.ORG_JUNIT_ASSERT, this.compoundName))
+						this.id = TypeIds.T_OrgJunitAssert;
+					return;						
+				case 4:
+					if (!CharOperation.equals(TypeConstants.JAVA, packageName))
+						return;
+					break; // continue below ...
+				case 5:
+					switch (packageName[1]) {
+						case 'a':
+							if (CharOperation.equals(TypeConstants.JAVAX_ANNOTATION_INJECT_INJECT, this.compoundName))
+								this.id = TypeIds.T_JavaxInjectInject;
+				return;
+						case 'u':
+							if (CharOperation.equals(TypeConstants.JUNIT_FRAMEWORK_ASSERT, this.compoundName))
+								this.id = TypeIds.T_JunitFrameworkAssert;
+							return;
+					}
+					return;
+				default: return;
+			}
+			// ... at this point we know it's java.*.*
+
+			packageName = this.compoundName[1];
+			if (packageName.length == 0) return; // just to be safe
+			char[] typeName = this.compoundName[2];
+			if (typeName.length == 0) return; // just to be safe
+			// remaining types MUST be in java.*.*
+			if (!CharOperation.equals(TypeConstants.LANG, this.compoundName[1])) {
+				switch (packageName[0]) {
+					case 'i' :
+						if (CharOperation.equals(packageName, TypeConstants.IO)) {
+							switch (typeName[0]) {
+>>>>>>> patch
 								case 'C' :
 									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_CLOSEABLE[2]))
 										this.typeBits |= TypeIds.BitCloseable; // don't assign id, only typeBit (for analysis of resource leaks) 
 									return;
+<<<<<<< HEAD
 								case 'E' :
 									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_EXTERNALIZABLE[2]))
 										this.id = TypeIds.T_JavaIoExternalizable;
@@ -438,6 +542,56 @@ public void computeId() {
 			// remaining types MUST be in java.lang.*
 			switch (typeName[0]) {
 				case 'A' :
+=======
+								case 'E' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_EXTERNALIZABLE[2]))
+										this.id = TypeIds.T_JavaIoExternalizable;
+									return;
+								case 'I' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_IOEXCEPTION[2]))
+										this.id = TypeIds.T_JavaIoException;
+									return;
+								case 'O' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_OBJECTSTREAMEXCEPTION[2]))
+										this.id = TypeIds.T_JavaIoObjectStreamException;
+									return;
+								case 'P' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_PRINTSTREAM[2]))
+										this.id = TypeIds.T_JavaIoPrintStream;
+									return;
+								case 'S' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_IO_SERIALIZABLE[2]))
+										this.id = TypeIds.T_JavaIoSerializable;
+									return;
+							}
+						}
+						return;
+					case 'u' :
+						if (CharOperation.equals(packageName, TypeConstants.UTIL)) {
+							switch (typeName[0]) {
+								case 'C' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_UTIL_COLLECTION[2]))
+										this.id = TypeIds.T_JavaUtilCollection;
+									return;
+								case 'I' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_UTIL_ITERATOR[2]))
+										this.id = TypeIds.T_JavaUtilIterator;
+									return;
+								case 'O' :
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_UTIL_OBJECTS[2]))
+										this.id = TypeIds.T_JavaUtilObjects;
+									return;
+							}
+						}
+						return;
+				}
+				return;
+			}
+
+			// remaining types MUST be in java.lang.*
+			switch (typeName[0]) {
+				case 'A' :
+>>>>>>> patch
 					switch(typeName.length) {
 						case 13 :
 							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_AUTOCLOSEABLE[2])) {
@@ -446,9 +600,9 @@ public void computeId() {
 							}
 							return;
 						case 14:
-							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_ASSERTIONERROR[2]))
-								this.id = TypeIds.T_JavaLangAssertionError;
-							return;
+					if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_ASSERTIONERROR[2]))
+						this.id = TypeIds.T_JavaLangAssertionError;
+					return;
 					}
 					return;
 				case 'B' :
@@ -569,6 +723,7 @@ public void computeId() {
 							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_SAFEVARARGS[2]))
 								this.id = TypeIds.T_JavaLangSafeVarargs;
 							return;
+<<<<<<< HEAD
 						case 12 :
 							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_STRINGBUFFER[2]))
 								this.id = TypeIds.T_JavaLangStringBuffer;
@@ -597,6 +752,42 @@ public void computeId() {
 		case 4:
 			if (!CharOperation.equals(TypeConstants.JAVA, this.compoundName[0]))
 				return;
+=======
+						case 12 :
+							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_STRINGBUFFER[2]))
+								this.id = TypeIds.T_JavaLangStringBuffer;
+							return;
+						case 13 :
+							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_STRINGBUILDER[2]))
+								this.id = TypeIds.T_JavaLangStringBuilder;
+							return;
+						case 16 :
+							if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_SUPPRESSWARNINGS[2]))
+								this.id = TypeIds.T_JavaLangSuppressWarnings;
+							return;
+					}
+					return;
+				case 'T' :
+					if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_THROWABLE[2]))
+						this.id = TypeIds.T_JavaLangThrowable;
+					return;
+				case 'V' :
+					if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_VOID[2]))
+						this.id = TypeIds.T_JavaLangVoid;
+					return;
+			}
+		break;
+
+		case 4:
+			// expect one type from com.*.*.*:
+			if (CharOperation.equals(TypeConstants.COM_GOOGLE_INJECT_INJECT, this.compoundName)) {
+				this.id = TypeIds.T_ComGoogleInjectInject;
+				return;
+			}
+			// otherwise only expect java.*.*.*
+			if (!CharOperation.equals(TypeConstants.JAVA, this.compoundName[0]))
+				return;
+>>>>>>> patch
 			packageName = this.compoundName[1];
 			if (packageName.length == 0) return; // just to be safe
 
@@ -678,26 +869,57 @@ public void computeId() {
 			packageName = this.compoundName[0];
 			switch (packageName[0]) {
 				case 'j' :
-					if (!CharOperation.equals(TypeConstants.JAVA, this.compoundName[0]))
+			if (!CharOperation.equals(TypeConstants.JAVA, this.compoundName[0]))
+				return;
+			packageName = this.compoundName[1];
+			if (packageName.length == 0) return; // just to be safe
+
+			if (CharOperation.equals(TypeConstants.LANG, packageName)) {
+				packageName = this.compoundName[2];
+				if (packageName.length == 0) return; // just to be safe
+				switch (packageName[0]) {
+					case 'i' :
+						if (CharOperation.equals(packageName, TypeConstants.INVOKE)) { 
+							typeName = this.compoundName[3];
+							if (typeName.length == 0) return; // just to be safe
+							switch (typeName[0]) {
+								case 'M' :
+									char[] memberTypeName = this.compoundName[4];
+									if (memberTypeName.length == 0) return; // just to be safe
+									if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_INVOKE_METHODHANDLE_POLYMORPHICSIGNATURE[3])
+											&& CharOperation.equals(memberTypeName, TypeConstants.JAVA_LANG_INVOKE_METHODHANDLE_POLYMORPHICSIGNATURE[4]))
+										this.id = TypeIds.T_JavaLangInvokeMethodHandlePolymorphicSignature;
+									return;
+							}
+						}
+						return;
+				}
+				return;
+	}
+					return;
+				case 'o':
+					if (!CharOperation.equals(TypeConstants.ORG, this.compoundName[0]))
 						return;
 					packageName = this.compoundName[1];
 					if (packageName.length == 0) return; // just to be safe
-					
-					if (CharOperation.equals(TypeConstants.LANG, packageName)) {
+
+					switch (packageName[0]) {
+						case 'e':
+					if (CharOperation.equals(TypeConstants.ECLIPSE, packageName)) {
 						packageName = this.compoundName[2];
 						if (packageName.length == 0) return; // just to be safe
 						switch (packageName[0]) {
-							case 'i' :
-								if (CharOperation.equals(packageName, TypeConstants.INVOKE)) { 
+							case 'c' :
+								if (CharOperation.equals(packageName, TypeConstants.CORE)) { 
 									typeName = this.compoundName[3];
 									if (typeName.length == 0) return; // just to be safe
 									switch (typeName[0]) {
-										case 'M' :
+										case 'r' :
 											char[] memberTypeName = this.compoundName[4];
 											if (memberTypeName.length == 0) return; // just to be safe
-											if (CharOperation.equals(typeName, TypeConstants.JAVA_LANG_INVOKE_METHODHANDLE_POLYMORPHICSIGNATURE[3])
-													&& CharOperation.equals(memberTypeName, TypeConstants.JAVA_LANG_INVOKE_METHODHANDLE_POLYMORPHICSIGNATURE[4]))
-												this.id = TypeIds.T_JavaLangInvokeMethodHandlePolymorphicSignature;
+											if (CharOperation.equals(typeName, TypeConstants.ORG_ECLIPSE_CORE_RUNTIME_ASSERT[3])
+													&& CharOperation.equals(memberTypeName, TypeConstants.ORG_ECLIPSE_CORE_RUNTIME_ASSERT[4]))
+												this.id = TypeIds.T_OrgEclipseCoreRuntimeAssert;
 											return;
 									}
 								}
@@ -706,6 +928,7 @@ public void computeId() {
 						return;
 					}
 					return;
+<<<<<<< HEAD
 				case 'o':
 					if (!CharOperation.equals(TypeConstants.ORG, this.compoundName[0]))
 						return;
@@ -732,11 +955,28 @@ public void computeId() {
 								}
 								return;
 						}
+=======
+						case 'a':
+							if (CharOperation.equals(TypeConstants.APACHE, packageName)) {
+								if (CharOperation.equals(TypeConstants.COMMONS, this.compoundName[2])) {
+									if (CharOperation.equals(TypeConstants.ORG_APACHE_COMMONS_LANG_VALIDATE, this.compoundName))
+										this.id = TypeIds.T_OrgApacheCommonsLangValidate;
+									else if (CharOperation.equals(TypeConstants.ORG_APACHE_COMMONS_LANG3_VALIDATE, this.compoundName))
+										this.id = TypeIds.T_OrgApacheCommonsLang3Validate;
+								}
+							}
+							return;
+			}
+					return;
+				case 'c':
+					if (!CharOperation.equals(TypeConstants.COM, this.compoundName[0]))
+>>>>>>> patch
 						return;
 					}
 					return;
 			}
 			break;
+<<<<<<< HEAD
 	}
 }
 
@@ -1381,6 +1621,686 @@ public char[] readableName() /*java.lang.Object,  p.X<T> */ {
 }
 
 public AnnotationHolder retrieveAnnotationHolder(Binding binding, boolean forceInitialization) {
+=======
+}
+}
+
+/**
+ * p.X<T extends Y & I, U extends Y> {} -> Lp/X<TT;TU;>;
+ */
+public char[] computeUniqueKey(boolean isLeaf) {
+	if (!isLeaf) return signature();
+	return genericTypeSignature();
+}
+
+/**
+ * Answer the receiver's constant pool name.
+ *
+ * NOTE: This method should only be used during/after code gen.
+ */
+public char[] constantPoolName() /* java/lang/Object */ {
+	if (this.constantPoolName != null) return this.constantPoolName;
+	return this.constantPoolName = CharOperation.concatWith(this.compoundName, '/');
+}
+
+public String debugName() {
+	return (this.compoundName != null) ? new String(readableName()) : "UNNAMED TYPE"; //$NON-NLS-1$
+}
+
+public final int depth() {
+	int depth = 0;
+	ReferenceBinding current = this;
+	while ((current = current.enclosingType()) != null)
+		depth++;
+	return depth;
+}
+
+public boolean detectAnnotationCycle() {
+	if ((this.tagBits & TagBits.EndAnnotationCheck) != 0) return false; // already checked
+	if ((this.tagBits & TagBits.BeginAnnotationCheck) != 0) return true; // in the middle of checking its methods
+
+	this.tagBits |= TagBits.BeginAnnotationCheck;
+	MethodBinding[] currentMethods = methods();
+	boolean inCycle = false; // check each method before failing
+	for (int i = 0, l = currentMethods.length; i < l; i++) {
+		TypeBinding returnType = currentMethods[i].returnType.leafComponentType().erasure();
+		if (this == returnType) {
+			if (this instanceof SourceTypeBinding) {
+				MethodDeclaration decl = (MethodDeclaration) currentMethods[i].sourceMethod();
+				((SourceTypeBinding) this).scope.problemReporter().annotationCircularity(this, this, decl != null ? decl.returnType : null);
+			}
+		} else if (returnType.isAnnotationType() && ((ReferenceBinding) returnType).detectAnnotationCycle()) {
+			if (this instanceof SourceTypeBinding) {
+				MethodDeclaration decl = (MethodDeclaration) currentMethods[i].sourceMethod();
+				((SourceTypeBinding) this).scope.problemReporter().annotationCircularity(this, returnType, decl != null ? decl.returnType : null);
+			}
+			inCycle = true;
+		}
+	}
+	if (inCycle)
+		return true;
+	this.tagBits |= TagBits.EndAnnotationCheck;
+	return false;
+}
+
+public final ReferenceBinding enclosingTypeAt(int relativeDepth) {
+	ReferenceBinding current = this;
+	while (relativeDepth-- > 0 && current != null)
+		current = current.enclosingType();
+	return current;
+}
+
+public int enumConstantCount() {
+	int count = 0;
+	FieldBinding[] fields = fields();
+	for (int i = 0, length = fields.length; i < length; i++) {
+		if ((fields[i].modifiers & ClassFileConstants.AccEnum) != 0) count++;
+	}
+	return count;
+}
+
+public int fieldCount() {
+	return fields().length;
+}
+
+public FieldBinding[] fields() {
+	return Binding.NO_FIELDS;
+}
+
+public final int getAccessFlags() {
+	return this.modifiers & ExtraCompilerModifiers.AccJustFlag;
+}
+
+/**
+ * @return the JSR 175 annotations for this type.
+ */
+public AnnotationBinding[] getAnnotations() {
+	return retrieveAnnotations(this);
+}
+
+/**
+ * @see org.eclipse.jdt.internal.compiler.lookup.Binding#getAnnotationTagBits()
+ */
+public long getAnnotationTagBits() {
+	return this.tagBits;
+}
+
+/**
+ * @return the enclosingInstancesSlotSize
+ */
+public int getEnclosingInstancesSlotSize() {
+	if (isStatic()) return 0;
+	return enclosingType() == null ? 0 : 1;
+}
+
+public MethodBinding getExactConstructor(TypeBinding[] argumentTypes) {
+	return null;
+}
+
+public MethodBinding getExactMethod(char[] selector, TypeBinding[] argumentTypes, CompilationUnitScope refScope) {
+	return null;
+}
+public FieldBinding getField(char[] fieldName, boolean needResolve) {
+	return null;
+}
+/**
+ * @see org.eclipse.jdt.internal.compiler.env.IDependent#getFileName()
+ */
+public char[] getFileName() {
+	return this.fileName;
+}
+
+public ReferenceBinding getMemberType(char[] typeName) {
+	ReferenceBinding[] memberTypes = memberTypes();
+	for (int i = memberTypes.length; --i >= 0;)
+		if (CharOperation.equals(memberTypes[i].sourceName, typeName))
+			return memberTypes[i];
+	return null;
+}
+
+public MethodBinding[] getMethods(char[] selector) {
+	return Binding.NO_METHODS;
+}
+
+// Answer methods named selector, which take no more than the suggestedParameterLength.
+// The suggested parameter length is optional and may not be guaranteed by every type.
+public MethodBinding[] getMethods(char[] selector, int suggestedParameterLength) {
+	return getMethods(selector);
+}
+
+/**
+ * @return the outerLocalVariablesSlotSize
+ */
+public int getOuterLocalVariablesSlotSize() {
+	return 0;
+}
+
+public PackageBinding getPackage() {
+	return this.fPackage;
+}
+
+public TypeVariableBinding getTypeVariable(char[] variableName) {
+	TypeVariableBinding[] typeVariables = typeVariables();
+	for (int i = typeVariables.length; --i >= 0;)
+		if (CharOperation.equals(typeVariables[i].sourceName, variableName))
+			return typeVariables[i];
+	return null;
+}
+
+public int hashCode() {
+	// ensure ReferenceBindings hash to the same position as UnresolvedReferenceBindings so they can be replaced without rehashing
+	// ALL ReferenceBindings are unique when created so equals() is the same as ==
+	return (this.compoundName == null || this.compoundName.length == 0)
+		? super.hashCode()
+		: CharOperation.hashCode(this.compoundName[this.compoundName.length - 1]);
+}
+
+/**
+ * Returns true if the two types have an incompatible common supertype,
+ * e.g. List<String> and List<Integer>
+ */
+public boolean hasIncompatibleSuperType(ReferenceBinding otherType) {
+
+    if (this == otherType) return false;
+
+	ReferenceBinding[] interfacesToVisit = null;
+	int nextPosition = 0;
+    ReferenceBinding currentType = this;
+	TypeBinding match;
+	do {
+		match = otherType.findSuperTypeOriginatingFrom(currentType);
+		if (match != null && match.isProvablyDistinct(currentType))
+			return true;
+
+		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
+			if (interfacesToVisit == null) {
+				interfacesToVisit = itsInterfaces;
+				nextPosition = interfacesToVisit.length;
+			} else {
+				int itsLength = itsInterfaces.length;
+				if (nextPosition + itsLength >= interfacesToVisit.length)
+					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+				nextInterface : for (int a = 0; a < itsLength; a++) {
+					ReferenceBinding next = itsInterfaces[a];
+					for (int b = 0; b < nextPosition; b++)
+						if (next == interfacesToVisit[b]) continue nextInterface;
+					interfacesToVisit[nextPosition++] = next;
+				}
+			}
+		}
+	} while ((currentType = currentType.superclass()) != null);
+
+	for (int i = 0; i < nextPosition; i++) {
+		currentType = interfacesToVisit[i];
+		if (currentType == otherType) return false;
+		match = otherType.findSuperTypeOriginatingFrom(currentType);
+		if (match != null && match.isProvablyDistinct(currentType))
+			return true;
+
+		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
+			int itsLength = itsInterfaces.length;
+			if (nextPosition + itsLength >= interfacesToVisit.length)
+				System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+			nextInterface : for (int a = 0; a < itsLength; a++) {
+				ReferenceBinding next = itsInterfaces[a];
+				for (int b = 0; b < nextPosition; b++)
+					if (next == interfacesToVisit[b]) continue nextInterface;
+				interfacesToVisit[nextPosition++] = next;
+			}
+		}
+	}
+	return false;
+}
+
+public boolean hasMemberTypes() {
+    return false;
+}
+
+/**
+ * Answer whether a @NonNullByDefault is applicable at the given method binding.
+ */
+boolean hasNonNullDefault() {
+	// Note, STB overrides for correctly handling local types
+	ReferenceBinding currentType = this;
+	while (currentType != null) {
+		if ((currentType.tagBits & TagBits.AnnotationNonNullByDefault) != 0)
+			return true;
+		if ((currentType.tagBits & TagBits.AnnotationNullUnspecifiedByDefault) != 0)
+			return false;
+		currentType = currentType.enclosingType();
+	}
+	// package
+	return this.getPackage().defaultNullness == NONNULL_BY_DEFAULT;
+}
+
+public final boolean hasRestrictedAccess() {
+	return (this.modifiers & ExtraCompilerModifiers.AccRestrictedAccess) != 0;
+}
+/** Answer an additional bit characterizing this type, like {@link TypeIds#BitAutoCloseable}. */
+abstract public boolean hasTypeBit(int bit);
+
+/** Answer true if the receiver implements anInterface or is identical to anInterface.
+* If searchHierarchy is true, then also search the receiver's superclasses.
+*
+* NOTE: Assume that anInterface is an interface.
+*/
+public boolean implementsInterface(ReferenceBinding anInterface, boolean searchHierarchy) {
+	if (this == anInterface)
+		return true;
+
+	ReferenceBinding[] interfacesToVisit = null;
+	int nextPosition = 0;
+	ReferenceBinding currentType = this;
+	do {
+		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) { // in code assist cases when source types are added late, may not be finished connecting hierarchy
+			if (interfacesToVisit == null) {
+				interfacesToVisit = itsInterfaces;
+				nextPosition = interfacesToVisit.length;
+			} else {
+				int itsLength = itsInterfaces.length;
+				if (nextPosition + itsLength >= interfacesToVisit.length)
+					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+				nextInterface : for (int a = 0; a < itsLength; a++) {
+					ReferenceBinding next = itsInterfaces[a];
+					for (int b = 0; b < nextPosition; b++)
+						if (next == interfacesToVisit[b]) continue nextInterface;
+					interfacesToVisit[nextPosition++] = next;
+				}
+			}
+		}
+	} while (searchHierarchy && (currentType = currentType.superclass()) != null);
+
+	for (int i = 0; i < nextPosition; i++) {
+		currentType = interfacesToVisit[i];
+		if (currentType.isEquivalentTo(anInterface))
+			return true;
+
+		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) { // in code assist cases when source types are added late, may not be finished connecting hierarchy
+			int itsLength = itsInterfaces.length;
+			if (nextPosition + itsLength >= interfacesToVisit.length)
+				System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+			nextInterface : for (int a = 0; a < itsLength; a++) {
+				ReferenceBinding next = itsInterfaces[a];
+				for (int b = 0; b < nextPosition; b++)
+					if (next == interfacesToVisit[b]) continue nextInterface;
+				interfacesToVisit[nextPosition++] = next;
+			}
+		}
+	}
+	return false;
+}
+
+// Internal method... assume its only sent to classes NOT interfaces
+boolean implementsMethod(MethodBinding method) {
+	char[] selector = method.selector;
+	ReferenceBinding type = this;
+	while (type != null) {
+		MethodBinding[] methods = type.methods();
+		long range;
+		if ((range = ReferenceBinding.binarySearch(selector, methods)) >= 0) {
+			int start = (int) range, end = (int) (range >> 32);
+			for (int i = start; i <= end; i++) {
+				if (methods[i].areParametersEqual(method))
+					return true;
+			}
+		}
+		type = type.superclass();
+	}
+	return false;
+}
+
+/**
+ * Answer true if the receiver is an abstract type
+*/
+public final boolean isAbstract() {
+	return (this.modifiers & ClassFileConstants.AccAbstract) != 0;
+}
+
+public boolean isAnnotationType() {
+	return (this.modifiers & ClassFileConstants.AccAnnotation) != 0;
+}
+
+public final boolean isBinaryBinding() {
+	return (this.tagBits & TagBits.IsBinaryBinding) != 0;
+}
+
+public boolean isClass() {
+	return (this.modifiers & (ClassFileConstants.AccInterface | ClassFileConstants.AccAnnotation | ClassFileConstants.AccEnum)) == 0;
+}
+
+/**
+ * Answer true if the receiver type can be assigned to the argument type (right)
+ * In addition to improving performance, caching also ensures there is no infinite regression
+ * since per nature, the compatibility check is recursive through parameterized type arguments (122775)
+ */
+public boolean isCompatibleWith(TypeBinding otherType, /*@Nullable*/ Scope captureScope) {
+	if (otherType == this)
+		return true;
+	if (otherType.id == TypeIds.T_JavaLangObject)
+		return true;
+	Object result;
+	if (this.compatibleCache == null) {
+		this.compatibleCache = new SimpleLookupTable(3);
+		result = null;
+	} else {
+		result = this.compatibleCache.get(otherType); // [dbg reset] this.compatibleCache.put(otherType,null)
+		if (result != null) {
+			return result == Boolean.TRUE;
+		}
+	}
+	this.compatibleCache.put(otherType, Boolean.FALSE); // protect from recursive call
+	if (isCompatibleWith0(otherType, captureScope)) {
+		this.compatibleCache.put(otherType, Boolean.TRUE);
+		return true;
+	}
+	if (captureScope == null 
+			&& this instanceof TypeVariableBinding 
+			&& ((TypeVariableBinding)this).firstBound instanceof ParameterizedTypeBinding) {
+		// see https://bugs.eclipse.org/395002#c9
+		// in this case a subsequent check with captureScope != null may actually get
+		// a better result, reset this info to ensure we're not blocking that re-check.
+		this.compatibleCache.put(otherType, null);
+	}
+	return false;
+}
+
+/**
+ * Answer true if the receiver type can be assigned to the argument type (right)
+ */
+private boolean isCompatibleWith0(TypeBinding otherType, /*@Nullable*/ Scope captureScope) {
+	if (otherType == this)
+		return true;
+	if (otherType.id == TypeIds.T_JavaLangObject)
+		return true;
+	// equivalence may allow compatibility with array type through wildcard
+	// bound
+	if (isEquivalentTo(otherType))
+		return true;
+	switch (otherType.kind()) {
+		case Binding.WILDCARD_TYPE :
+		case Binding.INTERSECTION_TYPE:
+			return false; // should have passed equivalence check above if
+							// wildcard
+		case Binding.TYPE_PARAMETER :
+			// check compatibility with capture of ? super X
+			if (otherType.isCapture()) {
+				CaptureBinding otherCapture = (CaptureBinding) otherType;
+				TypeBinding otherLowerBound;
+				if ((otherLowerBound = otherCapture.lowerBound) != null) {
+					if (otherLowerBound.isArrayType()) return false;
+					return isCompatibleWith(otherLowerBound);
+				}
+			}
+			//$FALL-THROUGH$
+		case Binding.GENERIC_TYPE :
+		case Binding.TYPE :
+		case Binding.PARAMETERIZED_TYPE :
+		case Binding.RAW_TYPE :
+			switch (kind()) {
+				case Binding.GENERIC_TYPE :
+				case Binding.PARAMETERIZED_TYPE :
+				case Binding.RAW_TYPE :
+					if (erasure() == otherType.erasure())
+						return false; // should have passed equivalence check
+										// above if same erasure
+			}
+			ReferenceBinding otherReferenceType = (ReferenceBinding) otherType;
+			if (otherReferenceType.isInterface()) { // could be annotation type
+				if (implementsInterface(otherReferenceType, true))
+					return true;
+				if (this instanceof TypeVariableBinding && captureScope != null) {
+					TypeVariableBinding typeVariable = (TypeVariableBinding) this;
+					if (typeVariable.firstBound instanceof ParameterizedTypeBinding) {
+						TypeBinding bound = typeVariable.firstBound.capture(captureScope, -1); // no position needed as this capture will never escape this context
+						return bound.isCompatibleWith(otherReferenceType);
+					}
+				}
+			}
+			if (isInterface())  // Explicit conversion from an interface
+										// to a class is not allowed
+				return false;
+			return otherReferenceType.isSuperclassOf(this);
+		default :
+			return false;
+	}
+}
+
+/**
+ * Answer true if the receiver has default visibility
+ */
+public final boolean isDefault() {
+	return (this.modifiers & (ClassFileConstants.AccPublic | ClassFileConstants.AccProtected | ClassFileConstants.AccPrivate)) == 0;
+}
+
+/**
+ * Answer true if the receiver is a deprecated type
+ */
+public final boolean isDeprecated() {
+	return (this.modifiers & ClassFileConstants.AccDeprecated) != 0;
+}
+
+public boolean isEnum() {
+	return (this.modifiers & ClassFileConstants.AccEnum) != 0;
+}
+
+/**
+ * Answer true if the receiver is final and cannot be subclassed
+ */
+public final boolean isFinal() {
+	return (this.modifiers & ClassFileConstants.AccFinal) != 0;
+}
+
+/**
+ * Returns true if the type hierarchy is being connected
+ */
+public boolean isHierarchyBeingConnected() {
+	return (this.tagBits & TagBits.EndHierarchyCheck) == 0 && (this.tagBits & TagBits.BeginHierarchyCheck) != 0;
+}
+/**
+ * Returns true if the type hierarchy is being connected "actively" i.e not paused momentatrily, 
+ * while resolving type arguments. See https://bugs.eclipse.org/bugs/show_bug.cgi?id=294057
+ */
+public boolean isHierarchyBeingActivelyConnected() {
+	return (this.tagBits & TagBits.EndHierarchyCheck) == 0 && (this.tagBits & TagBits.BeginHierarchyCheck) != 0 && (this.tagBits & TagBits.PauseHierarchyCheck) == 0;
+}
+
+/**
+ * Returns true if the type hierarchy is connected
+ */
+public boolean isHierarchyConnected() {
+	return true;
+}
+
+public boolean isInterface() {
+	// consider strict interfaces and annotation types
+	return (this.modifiers & ClassFileConstants.AccInterface) != 0;
+}
+
+/**
+ * Answer true if the receiver has private visibility
+ */
+public final boolean isPrivate() {
+	return (this.modifiers & ClassFileConstants.AccPrivate) != 0;
+}
+
+/**
+ * Answer true if the receiver or any of its enclosing types have private visibility
+ */
+public final boolean isOrEnclosedByPrivateType() {
+	if (isLocalType()) return true; // catch all local types
+	ReferenceBinding type = this;
+	while (type != null) {
+		if ((type.modifiers & ClassFileConstants.AccPrivate) != 0)
+			return true;
+		type = type.enclosingType();
+	}
+	return false;
+}
+
+/**
+ * Answer true if the receiver has protected visibility
+ */
+public final boolean isProtected() {
+	return (this.modifiers & ClassFileConstants.AccProtected) != 0;
+}
+
+/**
+ * Answer true if the receiver has public visibility
+ */
+public final boolean isPublic() {
+	return (this.modifiers & ClassFileConstants.AccPublic) != 0;
+}
+
+/**
+ * Answer true if the receiver is a static member type (or toplevel)
+ */
+public final boolean isStatic() {
+	return (this.modifiers & (ClassFileConstants.AccStatic | ClassFileConstants.AccInterface)) != 0 || (this.tagBits & TagBits.IsNestedType) == 0;
+}
+
+/**
+ * Answer true if all float operations must adher to IEEE 754 float/double rules
+ */
+public final boolean isStrictfp() {
+	return (this.modifiers & ClassFileConstants.AccStrictfp) != 0;
+}
+
+/**
+ * Answer true if the receiver is in the superclass hierarchy of aType
+ * NOTE: Object.isSuperclassOf(Object) -> false
+ */
+public boolean isSuperclassOf(ReferenceBinding otherType) {
+	while ((otherType = otherType.superclass()) != null) {
+		if (otherType.isEquivalentTo(this)) return true;
+	}
+	return false;
+}
+
+/**
+ * @see org.eclipse.jdt.internal.compiler.lookup.TypeBinding#isThrowable()
+ */
+public boolean isThrowable() {
+	ReferenceBinding current = this;
+	do {
+		switch (current.id) {
+			case TypeIds.T_JavaLangThrowable :
+			case TypeIds.T_JavaLangError :
+			case TypeIds.T_JavaLangRuntimeException :
+			case TypeIds.T_JavaLangException :
+				return true;
+		}
+	} while ((current = current.superclass()) != null);
+	return false;
+}
+
+/**
+ * JLS 11.5 ensures that Throwable, Exception, RuntimeException and Error are directly connected.
+ * (Throwable<- Exception <- RumtimeException, Throwable <- Error). Thus no need to check #isCompatibleWith
+ * but rather check in type IDs so as to avoid some eager class loading for JCL writers.
+ * When 'includeSupertype' is true, answers true if the given type can be a supertype of some unchecked exception
+ * type (i.e. Throwable or Exception).
+ * @see org.eclipse.jdt.internal.compiler.lookup.TypeBinding#isUncheckedException(boolean)
+ */
+public boolean isUncheckedException(boolean includeSupertype) {
+	switch (this.id) {
+			case TypeIds.T_JavaLangError :
+			case TypeIds.T_JavaLangRuntimeException :
+				return true;
+			case TypeIds.T_JavaLangThrowable :
+			case TypeIds.T_JavaLangException :
+				return includeSupertype;
+	}
+	ReferenceBinding current = this;
+	while ((current = current.superclass()) != null) {
+		switch (current.id) {
+			case TypeIds.T_JavaLangError :
+			case TypeIds.T_JavaLangRuntimeException :
+				return true;
+			case TypeIds.T_JavaLangThrowable :
+			case TypeIds.T_JavaLangException :
+				return false;
+		}
+	}
+	return false;
+}
+
+/**
+ * Answer true if the receiver has private visibility and is used locally
+ */
+public final boolean isUsed() {
+	return (this.modifiers & ExtraCompilerModifiers.AccLocallyUsed) != 0;
+}
+
+/**
+ * Answer true if the receiver is deprecated (or any of its enclosing types)
+ */
+public final boolean isViewedAsDeprecated() {
+	return (this.modifiers & (ClassFileConstants.AccDeprecated | ExtraCompilerModifiers.AccDeprecatedImplicitly)) != 0
+			|| getPackage().isViewedAsDeprecated();
+}
+
+public ReferenceBinding[] memberTypes() {
+	return Binding.NO_MEMBER_TYPES;
+}
+
+public MethodBinding[] methods() {
+	return Binding.NO_METHODS;
+}
+
+public final ReferenceBinding outermostEnclosingType() {
+	ReferenceBinding current = this;
+	while (true) {
+		ReferenceBinding last = current;
+		if ((current = current.enclosingType()) == null)
+			return last;
+	}
+}
+
+/**
+ * Answer the source name for the type.
+ * In the case of member types, as the qualified name from its top level type.
+ * For example, for a member type N defined inside M & A: "A.M.N".
+ */
+public char[] qualifiedSourceName() {
+	if (isMemberType())
+		return CharOperation.concat(enclosingType().qualifiedSourceName(), sourceName(), '.');
+	return sourceName();
+}
+
+/**
+ * Answer the receiver's signature.
+ *
+ * NOTE: This method should only be used during/after code gen.
+ */
+public char[] readableName() /*java.lang.Object,  p.X<T> */ {
+    char[] readableName;
+	if (isMemberType()) {
+		readableName = CharOperation.concat(enclosingType().readableName(), this.sourceName, '.');
+	} else {
+		readableName = CharOperation.concatWith(this.compoundName, '.');
+	}
+	TypeVariableBinding[] typeVars;
+	if ((typeVars = typeVariables()) != Binding.NO_TYPE_VARIABLES) {
+	    StringBuffer nameBuffer = new StringBuffer(10);
+	    nameBuffer.append(readableName).append('<');
+	    for (int i = 0, length = typeVars.length; i < length; i++) {
+	        if (i > 0) nameBuffer.append(',');
+	        nameBuffer.append(typeVars[i].readableName());
+	    }
+	    nameBuffer.append('>');
+		int nameLength = nameBuffer.length();
+		readableName = new char[nameLength];
+		nameBuffer.getChars(0, nameLength, readableName, 0);
+	}
+	return readableName;
+}
+
+public AnnotationHolder retrieveAnnotationHolder(Binding binding, boolean forceInitialization) {
+>>>>>>> patch
 	SimpleLookupTable store = storedAnnotations(forceInitialization);
 	return store == null ? null : (AnnotationHolder) store.get(binding);
 }
@@ -1487,7 +2407,6 @@ MethodBinding[] unResolvedMethods() { // for the MethodVerifier so it doesn't re
 public FieldBinding[] unResolvedFields() {
 	return Binding.NO_FIELDS;
 }
-
 /*
  * If a type - known to be a Closeable - is mentioned in one of our white lists
  * answer the typeBit for the white list (BitWrapperCloseable or BitResourceFreeCloseable).
@@ -1533,4 +2452,10 @@ protected int applyCloseableWhitelists() {
 	}	
 	return 0;
 }
+// GROOVY start
+// more thought required - is this in the right place?
+public MethodBinding[] getAnyExtraMethods(char[] selector) {
+	return null;
+}
+// GROOVY end
 }

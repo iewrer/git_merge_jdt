@@ -7,7 +7,13 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+<<<<<<< HEAD
  *     Stephan Herrmann - Contribution for bug 349326 - [1.7] new warning for missing try-with-resources
+=======
+ *     Stephan Herrmann - Contributions for
+ *								bug 349326 - [1.7] new warning for missing try-with-resources
+ *								bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 

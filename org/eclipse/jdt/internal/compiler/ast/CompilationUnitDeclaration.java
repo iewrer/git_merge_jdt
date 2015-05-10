@@ -1,5 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2012 IBM Corporation and others.
+<<<<<<< HEAD
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -218,6 +219,228 @@ public void finalizeProblems() {
 		CategorizedProblem problem = problems[iProblem];
 		int problemID = problem.getID();
 		int irritant = ProblemReporter.getIrritant(problemID);
+=======
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Stephan Herrmann  - Contribution for bug 295551
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler.ast;
+// GROOVY PATCHED
+
+import java.util.Arrays;
+import java.util.Comparator;
+
+import org.eclipse.jdt.core.compiler.CategorizedProblem;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
+import org.eclipse.jdt.internal.compiler.ClassFile;
+import org.eclipse.jdt.internal.compiler.CompilationResult;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.impl.IrritantSet;
+import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
+import org.eclipse.jdt.internal.compiler.lookup.CompilationUnitScope;
+import org.eclipse.jdt.internal.compiler.lookup.ImportBinding;
+import org.eclipse.jdt.internal.compiler.lookup.LocalTypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
+import org.eclipse.jdt.internal.compiler.lookup.MethodScope;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
+import org.eclipse.jdt.internal.compiler.parser.NLSTag;
+import org.eclipse.jdt.internal.compiler.problem.AbortCompilationUnit;
+import org.eclipse.jdt.internal.compiler.problem.AbortMethod;
+import org.eclipse.jdt.internal.compiler.problem.AbortType;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
+import org.eclipse.jdt.internal.compiler.util.HashSetOfInt;
+
+public class CompilationUnitDeclaration extends ASTNode implements ProblemSeverities, ReferenceContext {
+
+	private static final Comparator STRING_LITERAL_COMPARATOR = new Comparator() {
+		public int compare(Object o1, Object o2) {
+			StringLiteral literal1 = (StringLiteral) o1;
+			StringLiteral literal2 = (StringLiteral) o2;
+			return literal1.sourceStart - literal2.sourceStart;
+		}
+	};
+	private static final int STRING_LITERALS_INCREMENT = 10;
+
+	public ImportReference currentPackage;
+	public ImportReference[] imports;
+	public TypeDeclaration[] types;
+	public int[][] comments;
+
+	public boolean ignoreFurtherInvestigation = false; // once pointless to investigate due to errors
+	public boolean ignoreMethodBodies = false;
+	public CompilationUnitScope scope;
+	public ProblemReporter problemReporter;
+	public CompilationResult compilationResult;
+
+	public LocalTypeBinding[] localTypes;
+	public int localTypeCount = 0;
+
+	public boolean isPropagatingInnerClassEmulation;
+
+	public Javadoc javadoc; // 1.5 addition for package-info.java
+
+	public NLSTag[] nlsTags;
+	private StringLiteral[] stringLiterals;
+	private int stringLiteralsPtr;
+	private HashSetOfInt stringLiteralsStart;
+
+	IrritantSet[] suppressWarningIrritants;  // irritant for suppressed warnings
+	Annotation[] suppressWarningAnnotations;
+	long[] suppressWarningScopePositions; // (start << 32) + end
+	int suppressWarningsCount;
+
+public CompilationUnitDeclaration(ProblemReporter problemReporter, CompilationResult compilationResult, 	int sourceLength) {
+	this.problemReporter = problemReporter;
+	this.compilationResult = compilationResult;
+	//by definition of a compilation unit....
+	this.sourceStart = 0;
+	this.sourceEnd = sourceLength - 1;
+}
+
+/*
+ *	We cause the compilation task to abort to a given extent.
+ */
+public void abort(int abortLevel, CategorizedProblem problem) {
+	switch (abortLevel) {
+		case AbortType :
+			throw new AbortType(this.compilationResult, problem);
+		case AbortMethod :
+			throw new AbortMethod(this.compilationResult, problem);
+		default :
+			throw new AbortCompilationUnit(this.compilationResult, problem);
+	}
+}
+
+/*
+ * Dispatch code analysis AND request saturation of inner emulation
+ */
+public void analyseCode() {
+	if (this.ignoreFurtherInvestigation)
+		return;
+	try {
+		if (this.types != null) {
+			for (int i = 0, count = this.types.length; i < count; i++) {
+				this.types[i].analyseCode(this.scope);
+			}
+		}
+		// request inner emulation propagation
+		propagateInnerEmulationForAllLocalTypes();
+	} catch (AbortCompilationUnit e) {
+		this.ignoreFurtherInvestigation = true;
+		return;
+	}
+}
+
+/*
+ * When unit result is about to be accepted, removed back pointers
+ * to compiler structures.
+ */
+public void cleanUp() {
+	if (this.types != null) {
+		for (int i = 0, max = this.types.length; i < max; i++) {
+			cleanUp(this.types[i]);
+		}
+		for (int i = 0, max = this.localTypeCount; i < max; i++) {
+		    LocalTypeBinding localType = this.localTypes[i];
+			// null out the type's scope backpointers
+			localType.scope = null; // local members are already in the list
+			localType.enclosingCase = null;
+		}
+	}
+
+	this.compilationResult.recoveryScannerData = null; // recovery is already done
+
+	ClassFile[] classFiles = this.compilationResult.getClassFiles();
+	for (int i = 0, max = classFiles.length; i < max; i++) {
+		// clear the classFile back pointer to the bindings
+		ClassFile classFile = classFiles[i];
+		// null out the classfile backpointer to a type binding
+		classFile.referenceBinding = null;
+		classFile.innerClassesBindings = null;
+		classFile.missingTypes = null;
+		classFile.visitedTypes = null;
+	}
+
+	this.suppressWarningAnnotations = null;
+}
+
+private void cleanUp(TypeDeclaration type) {
+	if (type.memberTypes != null) {
+		for (int i = 0, max = type.memberTypes.length; i < max; i++){
+			cleanUp(type.memberTypes[i]);
+		}
+	}
+	if (type.binding != null && type.binding.isAnnotationType())
+		this.compilationResult.hasAnnotations = true;
+	if (type.binding != null) {
+		// null out the type's scope backpointers
+		type.binding.scope = null;
+	}
+}
+
+public void checkUnusedImports(){
+	if (this.scope.imports != null){
+		for (int i = 0, max = this.scope.imports.length; i < max; i++){
+			ImportBinding importBinding = this.scope.imports[i];
+			ImportReference importReference = importBinding.reference;
+			if (importReference != null && ((importReference.bits & ASTNode.Used) == 0)){
+				this.scope.problemReporter().unusedImport(importReference);
+			}
+		}
+	}
+}
+
+public CompilationResult compilationResult() {
+	return this.compilationResult;
+}
+
+public void createPackageInfoType() {
+	TypeDeclaration declaration = new TypeDeclaration(this.compilationResult);
+	declaration.name = TypeConstants.PACKAGE_INFO_NAME;
+	declaration.modifiers = ClassFileConstants.AccDefault | ClassFileConstants.AccInterface;
+	declaration.javadoc = this.javadoc;
+	this.types[0] = declaration; // Assumes the first slot is meant for this type
+}
+
+/*
+ * Finds the matching type amoung this compilation unit types.
+ * Returns null if no type with this name is found.
+ * The type name is a compound name
+ * e.g. if we're looking for X.A.B then a type name would be {X, A, B}
+ */
+public TypeDeclaration declarationOfType(char[][] typeName) {
+	for (int i = 0; i < this.types.length; i++) {
+		TypeDeclaration typeDecl = this.types[i].declarationOfType(typeName);
+		if (typeDecl != null) {
+			return typeDecl;
+		}
+	}
+	return null;
+}
+
+public void finalizeProblems() {
+	if (this.suppressWarningsCount == 0) return;
+	int removed = 0;
+	CategorizedProblem[] problems = this.compilationResult.problems;
+	int problemCount = this.compilationResult.problemCount;
+	IrritantSet[] foundIrritants = new IrritantSet[this.suppressWarningsCount];
+	CompilerOptions options = this.scope.compilerOptions();
+	boolean hasMandatoryErrors = false;
+	nextProblem: for (int iProblem = 0, length = problemCount; iProblem < length; iProblem++) {
+		CategorizedProblem problem = problems[iProblem];
+		int problemID = problem.getID();
+		int irritant = ProblemReporter.getIrritant(problemID);
+>>>>>>> patch
 		boolean isError = problem.isError();
 		if (isError) {
 			if (irritant == 0) {
@@ -718,4 +941,17 @@ public void traverse(ASTVisitor visitor, CompilationUnitScope unitScope) {
 		// ignore
 	}
 }
+
+	// GROOVY start
+	// new method so that other compilation unit declarations can built alternative scopes
+	public CompilationUnitScope buildCompilationUnitScope(LookupEnvironment lookupEnvironment) {
+		return new CompilationUnitScope(this,lookupEnvironment);
+	}
+	
+	// If a special dom CompilationUnit is needed return it, otherwise return null (and a default one will be created)
+	public org.eclipse.jdt.core.dom.CompilationUnit getSpecialDomCompilationUnit(org.eclipse.jdt.core.dom.AST ast) {
+		return null;
+	}
+	// GROOVY end
+
 }

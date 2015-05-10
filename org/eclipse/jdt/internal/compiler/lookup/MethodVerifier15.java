@@ -10,6 +10,14 @@
  *     Stephan Herrmann - Contributions for
  *								bug 186342 - [compiler][null] Using annotations for null checking
  *								bug 365519 - editorial cleanup after bug 186342 and bug 365387
+<<<<<<< HEAD
+=======
+ *								bug 388281 - [compiler][null] inheritance of null annotations as an option
+ *								bug 388795 - [compiler] detection of name clash depends on order of super interfaces
+ *								bug 395002 - Self bound generic class doesn't resolve bounds properly for wildcards for certain parametrisation.
+ *								bug 395681 - [compiler] Improve simulation of javac6 behavior from bug 317719 after fixing bug 388795
+ *								bug 409473 - [compiler] JDT cannot compile against JRE 1.8
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -687,6 +695,48 @@ void checkMethods() {
 		}
 	}
 }
+<<<<<<< HEAD
+=======
+/* mark as skippable
+ * - any interface method implemented by a class method
+ * - an x method (x in {class, interface}), for which another x method with a subsignature was found
+ * mark as isOverridden
+ * - any skippable method as defined above iff it is actually overridden by the specific method (disregarding visibility etc.)
+ * Note, that 'idx' corresponds to the position of 'general' in the arrays 'skip' and 'isOverridden'
+ */
+boolean isSkippableOrOverridden(MethodBinding specific, MethodBinding general, boolean[] skip, boolean[] isOverridden, int idx) {
+	boolean specificIsInterface = specific.declaringClass.isInterface();
+	boolean generalIsInterface = general.declaringClass.isInterface();
+	if (!specificIsInterface && generalIsInterface) {
+		if (isInterfaceMethodImplemented(general, specific, general.declaringClass)) {
+			skip[idx] = true;
+			isOverridden[idx] = true;
+			return true;
+		}
+	} else if (specificIsInterface == generalIsInterface) { 
+		if (isParameterSubsignature(specific, general)) {
+			skip[idx] = true;
+			isOverridden[idx] = specific.declaringClass.isCompatibleWith(general.declaringClass);
+			return true;
+		}
+	}
+	return false;
+}
+/* 'general' is considered as replaced by 'specific' if
+ * - 'specific' is "at least as concrete as" 'general'
+ * - 'specific' has a signature that is a subsignature of the substituted signature of 'general' (as seen from specific's declaring class)  
+ */
+MethodBinding findReplacedMethod(MethodBinding specific, MethodBinding general) {
+	MethodBinding generalSubstitute = computeSubstituteMethod(general, specific);
+	if (generalSubstitute != null 
+			&& (!specific.isAbstract() || general.isAbstract())	// if (abstract(specific) => abstract(general)) check if 'specific' overrides 'general' 
+			&& isSubstituteParameterSubsignature(specific, generalSubstitute)) 
+	{
+		return generalSubstitute;
+	} 
+	return null;
+}
+>>>>>>> patch
 void checkTypeVariableMethods(TypeParameter typeParameter) {
 	char[][] methodSelectors = this.inheritedMethods.keyTable;
 	nextSelector : for (int s = methodSelectors.length; --s >= 0;) {

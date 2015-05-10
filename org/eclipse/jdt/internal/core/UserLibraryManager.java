@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -85,6 +86,94 @@ public class UserLibraryManager {
 						instancePreferences.remove(propertyName);
 						preferencesNeedFlush = true;
 						continue;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.preferences.IEclipsePreferences;
+import org.eclipse.jdt.core.IClasspathContainer;
+import org.eclipse.jdt.core.IClasspathEntry;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.internal.core.util.Util;
+import org.osgi.service.prefs.BackingStoreException;
+
+/**
+ *
+ */
+public class UserLibraryManager {
+
+	public final static String CP_USERLIBRARY_PREFERENCES_PREFIX = JavaCore.PLUGIN_ID+".userLibrary."; //$NON-NLS-1$
+
+	private Map userLibraries;
+
+	public UserLibraryManager() {
+		initialize();
+	}
+
+	/*
+	 * Gets the library for a given name or <code>null</code> if no such library exists.
+	 */
+	public synchronized UserLibrary getUserLibrary(String libName) {
+		return (UserLibrary) this.userLibraries.get(libName);
+	}
+
+	/*
+	 * Returns the names of all defined user libraries. The corresponding classpath container path
+	 * is the name appended to the CONTAINER_ID.
+	 */
+	public synchronized String[] getUserLibraryNames() {
+		Set set = this.userLibraries.keySet();
+		return (String[]) set.toArray(new String[set.size()]);
+	}
+
+	private void initialize() {
+		this.userLibraries = new HashMap();
+		IEclipsePreferences instancePreferences = JavaModelManager.getJavaModelManager().getInstancePreferences();
+		String[] propertyNames;
+		try {
+			propertyNames = instancePreferences.keys();
+		} catch (BackingStoreException e) {
+			Util.log(e, "Exception while initializing user libraries"); //$NON-NLS-1$
+			return;
+		}
+
+		boolean preferencesNeedFlush = false;
+		for (int i = 0, length = propertyNames.length; i < length; i++) {
+			String propertyName = propertyNames[i];
+			if (propertyName.startsWith(CP_USERLIBRARY_PREFERENCES_PREFIX)) {
+				String propertyValue = instancePreferences.get(propertyName, null);
+				if (propertyValue != null) {
+					String libName= propertyName.substring(CP_USERLIBRARY_PREFERENCES_PREFIX.length());
+					StringReader reader = new StringReader(propertyValue);
+					UserLibrary library;
+					try {
+						library = UserLibrary.createFromString(reader);
+					} catch (IOException e) {
+						Util.log(e, "Exception while initializing user library " + libName); //$NON-NLS-1$
+						instancePreferences.remove(propertyName);
+						preferencesNeedFlush = true;
+						continue;
+>>>>>>> patch
 					} catch (ClasspathEntry.AssertionFailedException e) {
 						Util.log(e, "Exception while initializing user library " + libName); //$NON-NLS-1$
 						instancePreferences.remove(propertyName);
@@ -157,7 +246,6 @@ public class UserLibraryManager {
 		} catch (ClasspathEntry.AssertionFailedException ase) {
 			Util.log(ase, "Exception while decoding user library '"+ libName +"'."); //$NON-NLS-1$ //$NON-NLS-2$
 		}
-		
 	}
 
 	public void removeUserLibrary(String libName)  {

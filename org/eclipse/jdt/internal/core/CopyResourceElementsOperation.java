@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -267,6 +268,282 @@ public class CopyResourceElementsOperation extends MultiOperation implements Suf
 	 * <li>On a copy, the delta should be rooted in the dest project
 	 * <li>On a move, two deltas are generated<ul>
 	 * 			<li>one rooted in the source project
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core;
+// GROOVY PATCHED
+
+import java.util.*;
+
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
+import org.eclipse.core.resources.*;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.jobs.ISchedulingRule;
+import org.eclipse.core.runtime.jobs.MultiRule;
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTParser;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.Javadoc;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Name;
+import org.eclipse.jdt.core.dom.PackageDeclaration;
+import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.util.Messages;
+import org.eclipse.jdt.internal.core.util.Util;
+import org.eclipse.text.edits.DeleteEdit;
+import org.eclipse.text.edits.InsertEdit;
+import org.eclipse.text.edits.MultiTextEdit;
+import org.eclipse.text.edits.ReplaceEdit;
+import org.eclipse.text.edits.TextEdit;
+
+/**
+ * This operation copies/moves/renames a collection of resources from their current
+ * container to a new container, optionally renaming the
+ * elements.
+ * <p>Notes:<ul>
+ *    <li>If there is already an resource with the same name in
+ *    the new container, the operation either overwrites or aborts,
+ *    depending on the collision policy setting. The default setting is
+ *	  abort.
+ *
+ *    <li>When a compilation unit is copied to a new package, the
+ *    package declaration in the compilation unit is automatically updated.
+ *
+ *    <li>The collection of elements being copied must all share the
+ *    same type of container.
+ *
+ *    <li>This operation can be used to copy and rename elements within
+ *    the same container.
+ *
+ *    <li>This operation only copies compilation units and package fragments.
+ *    It does not copy package fragment roots - a platform operation must be used for that.
+ * </ul>
+ *
+ */
+public class CopyResourceElementsOperation extends MultiOperation implements SuffixConstants {
+	/**
+	 * The list of new resources created during this operation.
+	 */
+	protected ArrayList createdElements;
+	/**
+	 * Table specifying deltas for elements being
+	 * copied/moved/renamed. Keyed by elements' project(s), and
+	 * values are the corresponding deltas.
+	 */
+	protected Map deltasPerProject = new HashMap(1);
+	/**
+	 * The <code>ASTParser</code> used to manipulate the source code of
+	 * <code>ICompilationUnit</code>.
+	 */
+	protected ASTParser parser;
+	/**
+	 * When executed, this operation will copy the given resources to the
+	 * given containers.  The resources and destination containers must be in
+	 * the correct order. If there is > 1 destination, the number of destinations
+	 * must be the same as the number of resources being copied/moved.
+	 */
+	public CopyResourceElementsOperation(IJavaElement[] resourcesToCopy, IJavaElement[] destContainers, boolean force) {
+		super(resourcesToCopy, destContainers, force);
+		initializeASTParser();
+	}
+	private void initializeASTParser() {
+		this.parser = ASTParser.newParser(AST.JLS4);
+	}
+	/**
+	 * Returns the children of <code>source</code> which are affected by this operation.
+	 * If <code>source</code> is a <code>K_SOURCE</code>, these are the <code>.java</code>
+	 * files, if it is a <code>K_BINARY</code>, they are the <code>.class</code> files.
+	 */
+	private IResource[] collectResourcesOfInterest(IPackageFragment source) throws JavaModelException {
+		IJavaElement[] children = source.getChildren();
+		int childOfInterest = IJavaElement.COMPILATION_UNIT;
+		if (source.getKind() == IPackageFragmentRoot.K_BINARY) {
+			childOfInterest = IJavaElement.CLASS_FILE;
+		}
+		ArrayList correctKindChildren = new ArrayList(children.length);
+		for (int i = 0; i < children.length; i++) {
+			IJavaElement child = children[i];
+			if (child.getElementType() == childOfInterest) {
+				correctKindChildren.add(((JavaElement) child).resource());
+			}
+		}
+		// Gather non-java resources
+		Object[] nonJavaResources = source.getNonJavaResources();
+		int actualNonJavaResourceCount = 0;
+		for (int i = 0, max = nonJavaResources.length; i < max; i++){
+			if (nonJavaResources[i] instanceof IResource) actualNonJavaResourceCount++;
+		}
+		IResource[] actualNonJavaResources = new IResource[actualNonJavaResourceCount];
+		for (int i = 0, max = nonJavaResources.length, index = 0; i < max; i++){
+			if (nonJavaResources[i] instanceof IResource) actualNonJavaResources[index++] = (IResource)nonJavaResources[i];
+		}
+
+		if (actualNonJavaResourceCount != 0) {
+			int correctKindChildrenSize = correctKindChildren.size();
+			IResource[] result = new IResource[correctKindChildrenSize + actualNonJavaResourceCount];
+			correctKindChildren.toArray(result);
+			System.arraycopy(actualNonJavaResources, 0, result, correctKindChildrenSize, actualNonJavaResourceCount);
+			return result;
+		} else {
+			IResource[] result = new IResource[correctKindChildren.size()];
+			correctKindChildren.toArray(result);
+			return result;
+		}
+	}
+	/**
+	 * Creates any destination package fragment(s) which do not exists yet.
+	 * Return true if a read-only package fragment has been found among package fragments, false otherwise
+	 */
+	private boolean createNeededPackageFragments(IContainer sourceFolder, PackageFragmentRoot root, String[] newFragName, boolean moveFolder) throws JavaModelException {
+		boolean containsReadOnlyPackageFragment = false;
+		IContainer parentFolder = (IContainer) root.resource();
+		JavaElementDelta projectDelta = null;
+		String[] sideEffectPackageName = null;
+		char[][] inclusionPatterns = root.fullInclusionPatternChars();
+		char[][] exclusionPatterns = root.fullExclusionPatternChars();
+		for (int i = 0; i < newFragName.length; i++) {
+			String subFolderName = newFragName[i];
+			sideEffectPackageName = Util.arrayConcat(sideEffectPackageName, subFolderName);
+			IResource subFolder = parentFolder.findMember(subFolderName);
+			if (subFolder == null) {
+				// create deepest folder only if not a move (folder will be moved in processPackageFragmentResource)
+				if (!(moveFolder && i == newFragName.length-1)) {
+					createFolder(parentFolder, subFolderName, this.force);
+				}
+				parentFolder = parentFolder.getFolder(new Path(subFolderName));
+				sourceFolder = sourceFolder.getFolder(new Path(subFolderName));
+				if (Util.isReadOnly(sourceFolder)) {
+					containsReadOnlyPackageFragment = true;
+				}
+				IPackageFragment sideEffectPackage = root.getPackageFragment(sideEffectPackageName);
+				if (i < newFragName.length - 1 // all but the last one are side effect packages
+						&& !Util.isExcluded(parentFolder, inclusionPatterns, exclusionPatterns)) {
+					if (projectDelta == null) {
+						projectDelta = getDeltaFor(root.getJavaProject());
+					}
+					projectDelta.added(sideEffectPackage);
+				}
+				this.createdElements.add(sideEffectPackage);
+			} else {
+				parentFolder = (IContainer) subFolder;
+			}
+		}
+		return containsReadOnlyPackageFragment;
+	}
+
+	/**
+	 * Returns the <code>JavaElementDelta</code> for <code>javaProject</code>,
+	 * creating it and putting it in <code>fDeltasPerProject</code> if
+	 * it does not exist yet.
+	 */
+	private JavaElementDelta getDeltaFor(IJavaProject javaProject) {
+		JavaElementDelta delta = (JavaElementDelta) this.deltasPerProject.get(javaProject);
+		if (delta == null) {
+			delta = new JavaElementDelta(javaProject);
+			this.deltasPerProject.put(javaProject, delta);
+		}
+		return delta;
+	}
+	/**
+	 * @see MultiOperation
+	 */
+	protected String getMainTaskName() {
+		return Messages.operation_copyResourceProgress;
+	}
+	protected ISchedulingRule getSchedulingRule() {
+		if (this.elementsToProcess == null)
+			return null;
+		int length = this.elementsToProcess.length;
+		if (length == 1)
+			return getSchedulingRule(this.elementsToProcess[0]);
+		ISchedulingRule[] rules = new ISchedulingRule[length];
+		int index = 0;
+		for (int i = 0; i < length; i++) {
+			ISchedulingRule rule = getSchedulingRule(this.elementsToProcess[i]);
+			if (rule != null) {
+				rules[index++] = rule;
+			}
+		}
+		if (index != length)
+			System.arraycopy(rules, 0, rules = new ISchedulingRule[index], 0, index);
+		return new MultiRule(rules);
+	}
+	private ISchedulingRule getSchedulingRule(IJavaElement element) {
+		if (element == null)
+			return null;
+		IResource sourceResource = getResource(element);
+		IResource destContainer = getResource(getDestinationParent(element));
+		if (!(destContainer instanceof IContainer)) {
+			return null;
+		}
+		String newName;
+		try {
+			newName = getNewNameFor(element);
+		} catch (JavaModelException e) {
+			return null;
+		}
+		if (newName == null)
+			newName = element.getElementName();
+		IResource destResource;
+		String sourceEncoding = null;
+		if (sourceResource.getType() == IResource.FILE) {
+			destResource = ((IContainer) destContainer).getFile(new Path(newName));
+			try {
+				sourceEncoding = ((IFile) sourceResource).getCharset(false);
+			} catch (CoreException ce) {
+				// use default encoding
+			}
+		} else {
+			destResource = ((IContainer) destContainer).getFolder(new Path(newName));
+		}
+		IResourceRuleFactory factory = ResourcesPlugin.getWorkspace().getRuleFactory();
+		ISchedulingRule rule;
+		if (isMove()) {
+			rule = factory.moveRule(sourceResource, destResource);
+		} else {
+			rule = factory.copyRule(sourceResource, destResource);
+		}
+		if (sourceEncoding != null) {
+			rule = new MultiRule(new ISchedulingRule[] {rule, factory.charsetRule(destResource)});
+		}
+		return rule;
+	}
+	private IResource getResource(IJavaElement element) {
+		if (element == null)
+			return null;
+		if (element.getElementType() == IJavaElement.PACKAGE_FRAGMENT) {
+			String pkgName = element.getElementName();
+			int firstDot = pkgName.indexOf('.');
+			if (firstDot != -1) {
+				element = ((IPackageFragmentRoot) element.getParent()).getPackageFragment(pkgName.substring(0, firstDot));
+			}
+		}
+		return element.getResource();
+	}
+	/**
+	 * Sets the deltas to register the changes resulting from this operation
+	 * for this source element and its destination.
+	 * If the operation is a cross project operation<ul>
+	 * <li>On a copy, the delta should be rooted in the dest project
+	 * <li>On a move, two deltas are generated<ul>
+	 * 			<li>one rooted in the source project
+>>>>>>> patch
 	 *			<li>one rooted in the destination project
 	 * <li> When a CU is being overwritten, the delta on the destination will be of type F_CONTENT </ul></ul>
 	 * If the operation is rooted in a single project, the delta is rooted in that project
@@ -274,21 +551,20 @@ public class CopyResourceElementsOperation extends MultiOperation implements Suf
 	 */
 	protected void prepareDeltas(IJavaElement sourceElement, IJavaElement destinationElement, boolean isMove, boolean overWriteCU) {
 		if (Util.isExcluded(sourceElement) || Util.isExcluded(destinationElement)) return;
-		
 		IJavaProject destProject = destinationElement.getJavaProject();
 		if (isMove) {
 			IJavaProject sourceProject = sourceElement.getJavaProject();
 			getDeltaFor(sourceProject).movedFrom(sourceElement, destinationElement);
 			if (!overWriteCU) {
-				getDeltaFor(destProject).movedTo(destinationElement, sourceElement);
+			getDeltaFor(destProject).movedTo(destinationElement, sourceElement);
 				return;
 			}
 		} else {
 			if (!overWriteCU) {
-				getDeltaFor(destProject).added(destinationElement);
+			getDeltaFor(destProject).added(destinationElement);
 				return;
-			}
 		}
+	}
 		getDeltaFor(destinationElement.getJavaProject()).changed(destinationElement, IJavaElementDelta.F_CONTENT);
 	}
 	/**
@@ -319,7 +595,13 @@ public class CopyResourceElementsOperation extends MultiOperation implements Suf
 		// copy resource
 		IContainer destFolder = (IContainer)dest.getResource(); // can be an IFolder or an IProject
 		IFile destFile = destFolder.getFile(new Path(destName));
+	    // GROOVY start
+	    /* old {
 		org.eclipse.jdt.internal.core.CompilationUnit destCU = new org.eclipse.jdt.internal.core.CompilationUnit(dest, destName, DefaultWorkingCopyOwner.PRIMARY);
+	    } new */
+		org.eclipse.jdt.internal.core.CompilationUnit destCU = LanguageSupportFactory.newCompilationUnit(dest, destName, DefaultWorkingCopyOwner.PRIMARY);
+	    // GROOVY end
+		
 		if (!destFile.equals(sourceResource)) {
 			try {
 				if (!destCU.isWorkingCopy()) {
@@ -627,6 +909,14 @@ public class CopyResourceElementsOperation extends MultiOperation implements Suf
 		} else {
 			// ensure cu is consistent (noop if already consistent)
 			cu.makeConsistent(this.progressMonitor);
+			
+		    // GROOVY start
+			// don't use the ASTParser if not a Java compilation unit
+			if (LanguageSupportFactory.isInterestingSourceFile(cu.getElementName())) {
+				return updateNonJavaContent(cu, destPackageName, currPackageName, newName);
+			}
+		    // GROOVY end
+
 			this.parser.setSource(cu);
 			CompilationUnit astCU = (CompilationUnit) this.parser.createAST(this.progressMonitor);
 			AST ast = astCU.getAST();
@@ -636,6 +926,64 @@ public class CopyResourceElementsOperation extends MultiOperation implements Suf
 			return rewrite.rewriteAST();
 		}
 	}
+	
+	// GROOVY start
+	// create the content for non-Java files 
+	private TextEdit updateNonJavaContent(ICompilationUnit cu, String[] destPackageName, String[] currPackageName, String newName) throws JavaModelException {
+		// package statement
+		IPackageDeclaration[] packageDecls = cu.getPackageDeclarations();
+		boolean doPackage = !Util.equalArraysOrNull(currPackageName, destPackageName);
+		boolean doName = newName != null;
+		MultiTextEdit multiEdit = new MultiTextEdit();
+		if (doPackage) {
+			if (packageDecls.length == 1) {
+				ISourceRange packageRange = packageDecls[0].getSourceRange();
+				if (destPackageName == null || destPackageName.length == 0) {
+					// move to default package
+					multiEdit.addChild(new DeleteEdit(packageRange.getOffset(), packageRange.getLength()));
+				} else {
+					multiEdit.addChild(new ReplaceEdit(packageRange.getOffset(), packageRange.getLength(), "package " + Util.concatWith(destPackageName, '.'))); //$NON-NLS-1$
+				}
+			} else {
+				// move from default package
+				// we don't keep track of comments, so we don't know where they start.  Just add the package declaration at location 0
+				multiEdit.addChild(new InsertEdit(0, "package " + Util.concatWith(destPackageName, '.') + "\n"));  //$NON-NLS-1$//$NON-NLS-2$
+			}
+		}		
+
+		if (doName) {
+			int dotIndex = cu.getElementName().indexOf('.');
+			dotIndex = dotIndex == -1 ? cu.getElementName().length() : dotIndex;
+			String oldTypeName = cu.getElementName().substring(0, dotIndex);
+			dotIndex = newName.indexOf('.');
+			dotIndex = dotIndex == -1 ? newName.length() : dotIndex;
+			String newTypeName = newName.substring(0, dotIndex);
+			IType type = cu.getType(oldTypeName);
+			if (type.exists()) {
+				ISourceRange nameRange = type.getNameRange();
+				// main type can be implicitly defined, so check offsets
+				if (nameRange.getOffset() > 0 && nameRange.getLength() > 0 && oldTypeName.length() == nameRange.getLength()) {
+					multiEdit.addChild(new ReplaceEdit(nameRange.getOffset(), nameRange.getLength(), newTypeName));
+				}
+				IJavaElement[] children = type.getChildren();
+				for (int i = 0; i < children.length; i++) {
+					if (children[i].getElementType() == IJavaElement.METHOD) {
+						IMethod method = (IMethod) children[i];
+						if (method.isConstructor()) {
+							nameRange = method.getNameRange();
+							// main type can be implicitly defined, so check offsets
+							if (nameRange.getOffset() > 0 && nameRange.getLength() > 0) {
+								multiEdit.addChild(new ReplaceEdit(nameRange.getOffset(), nameRange.getLength(), newTypeName));
+							}
+						}
+					}
+				}
+			}
+		}
+		return multiEdit;
+	}
+	// GROOVY end
+	
 	private void updatePackageStatement(CompilationUnit astCU, String[] pkgName, ASTRewrite rewriter, ICompilationUnit cu) throws JavaModelException {
 		boolean defaultPackage = pkgName.length == 0;
 		AST ast = astCU.getAST();

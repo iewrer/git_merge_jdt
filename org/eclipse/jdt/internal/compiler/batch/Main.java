@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -10,6 +11,20 @@
  *     Tom Tromey - Contribution for bug 125961
  *     Tom Tromey - Contribution for bug 159641
  *     Benjamin Muskalla - Contribution for bug 239066
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Tom Tromey - Contribution for bug 125961
+ *     Tom Tromey - Contribution for bug 159641
+ *     Benjamin Muskalla - Contribution for bug 239066
+>>>>>>> patch
  *     Stephan Herrmann  - Contributions for 
  *     							bug 236385 - [compiler] Warn for potential programming problem if an object is created but not used
  *     							bug 295551 - Add option to automatically promote all warnings to errors
@@ -19,6 +34,7 @@
  *								bug 375366 - ECJ ignores unusedParameterIncludeDocCommentReference unless enableJavadoc option is set
  *								bug 388281 - [compiler][null] inheritance of null annotations as an option
  *								bug 381443 - [compiler][null] Allow parameter widening from @NonNull to unannotated
+<<<<<<< HEAD
  *     Jesper S Moller   - Contributions for
  *								bug 407297 - [1.8][compiler] Control generation of parameter names by option
  *    Mat Booth - Contribution for bug 405176 
@@ -286,6 +302,270 @@ public class Main implements ProblemSeverities, SuffixConstants {
 					}
 				}
 			}
+=======
+ *******************************************************************************/
+package org.eclipse.jdt.internal.compiler.batch;
+
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.LineNumberReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
+import java.text.DateFormat;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Set;
+import java.util.StringTokenizer;
+
+import org.eclipse.jdt.core.compiler.CategorizedProblem;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.compiler.CompilationProgress;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.core.compiler.batch.BatchCompiler;
+import org.eclipse.jdt.internal.compiler.AbstractAnnotationProcessorManager;
+import org.eclipse.jdt.internal.compiler.ClassFile;
+import org.eclipse.jdt.internal.compiler.CompilationResult;
+import org.eclipse.jdt.internal.compiler.Compiler;
+import org.eclipse.jdt.internal.compiler.ICompilerRequestor;
+import org.eclipse.jdt.internal.compiler.IErrorHandlingPolicy;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.batch.FileSystem.Classpath;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.env.AccessRestriction;
+import org.eclipse.jdt.internal.compiler.env.AccessRule;
+import org.eclipse.jdt.internal.compiler.env.AccessRuleSet;
+import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.CompilerStats;
+import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
+import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
+import org.eclipse.jdt.internal.compiler.util.GenericXMLWriter;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfInt;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
+import org.eclipse.jdt.internal.compiler.util.Messages;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.compiler.util.Util;
+
+public class Main implements ProblemSeverities, SuffixConstants {
+	public static class Logger {
+		private PrintWriter err;
+		private PrintWriter log;
+		private Main main;
+		private PrintWriter out;
+		private HashMap parameters;
+		int tagBits;
+		private static final String CLASS = "class"; //$NON-NLS-1$
+		private static final String CLASS_FILE = "classfile"; //$NON-NLS-1$
+		private static final String CLASSPATH = "classpath"; //$NON-NLS-1$
+		private static final String CLASSPATH_FILE = "FILE"; //$NON-NLS-1$
+		private static final String CLASSPATH_FOLDER = "FOLDER"; //$NON-NLS-1$
+		private static final String CLASSPATH_ID = "id"; //$NON-NLS-1$
+		private static final String CLASSPATH_JAR = "JAR"; //$NON-NLS-1$
+		private static final String CLASSPATHS = "classpaths"; //$NON-NLS-1$
+		private static final String COMMAND_LINE_ARGUMENT = "argument"; //$NON-NLS-1$
+		private static final String COMMAND_LINE_ARGUMENTS = "command_line"; //$NON-NLS-1$
+		private static final String COMPILER = "compiler"; //$NON-NLS-1$
+		private static final String COMPILER_COPYRIGHT = "copyright"; //$NON-NLS-1$
+		private static final String COMPILER_NAME = "name"; //$NON-NLS-1$
+		private static final String COMPILER_VERSION = "version"; //$NON-NLS-1$
+		public static final int EMACS = 2;
+		private static final String ERROR = "ERROR"; //$NON-NLS-1$
+		private static final String ERROR_TAG = "error"; //$NON-NLS-1$
+		private static final String WARNING_TAG = "warning"; //$NON-NLS-1$
+		private static final String EXCEPTION = "exception"; //$NON-NLS-1$
+		private static final String EXTRA_PROBLEM_TAG = "extra_problem"; //$NON-NLS-1$
+		private static final String EXTRA_PROBLEMS = "extra_problems"; //$NON-NLS-1$
+		private static final HashtableOfInt FIELD_TABLE = new HashtableOfInt();
+		private static final String KEY = "key"; //$NON-NLS-1$
+		private static final String MESSAGE = "message"; //$NON-NLS-1$
+		private static final String NUMBER_OF_CLASSFILES = "number_of_classfiles"; //$NON-NLS-1$
+		private static final String NUMBER_OF_ERRORS = "errors"; //$NON-NLS-1$
+		private static final String NUMBER_OF_LINES = "number_of_lines"; //$NON-NLS-1$
+		private static final String NUMBER_OF_PROBLEMS = "problems"; //$NON-NLS-1$
+		private static final String NUMBER_OF_TASKS = "tasks"; //$NON-NLS-1$
+		private static final String NUMBER_OF_WARNINGS = "warnings"; //$NON-NLS-1$
+		private static final String OPTION = "option"; //$NON-NLS-1$
+		private static final String OPTIONS = "options"; //$NON-NLS-1$
+		private static final String OUTPUT = "output"; //$NON-NLS-1$
+		private static final String PACKAGE = "package"; //$NON-NLS-1$
+		private static final String PATH = "path"; //$NON-NLS-1$
+		private static final String PROBLEM_ARGUMENT = "argument"; //$NON-NLS-1$
+		private static final String PROBLEM_ARGUMENT_VALUE = "value"; //$NON-NLS-1$
+		private static final String PROBLEM_ARGUMENTS = "arguments"; //$NON-NLS-1$
+		private static final String PROBLEM_CATEGORY_ID = "categoryID"; //$NON-NLS-1$
+		private static final String ID = "id"; //$NON-NLS-1$
+		private static final String PROBLEM_ID = "problemID"; //$NON-NLS-1$
+		private static final String PROBLEM_LINE = "line"; //$NON-NLS-1$
+		private static final String PROBLEM_OPTION_KEY = "optionKey"; //$NON-NLS-1$
+		private static final String PROBLEM_MESSAGE = "message"; //$NON-NLS-1$
+		private static final String PROBLEM_SEVERITY = "severity"; //$NON-NLS-1$
+		private static final String PROBLEM_SOURCE_END = "charEnd"; //$NON-NLS-1$
+		private static final String PROBLEM_SOURCE_START = "charStart"; //$NON-NLS-1$
+		private static final String PROBLEM_SUMMARY = "problem_summary"; //$NON-NLS-1$
+		private static final String PROBLEM_TAG = "problem"; //$NON-NLS-1$
+		private static final String PROBLEMS = "problems"; //$NON-NLS-1$
+		private static final String SOURCE = "source"; //$NON-NLS-1$
+		private static final String SOURCE_CONTEXT = "source_context"; //$NON-NLS-1$
+		private static final String SOURCE_END = "sourceEnd"; //$NON-NLS-1$
+		private static final String SOURCE_START = "sourceStart"; //$NON-NLS-1$
+		private static final String SOURCES = "sources"; //$NON-NLS-1$
+
+		private static final String STATS = "stats"; //$NON-NLS-1$
+
+		private static final String TASK = "task"; //$NON-NLS-1$
+		private static final String TASKS = "tasks"; //$NON-NLS-1$
+		private static final String TIME = "time"; //$NON-NLS-1$
+		private static final String VALUE = "value"; //$NON-NLS-1$
+		private static final String WARNING = "WARNING"; //$NON-NLS-1$
+		public static final int XML = 1;
+		private static final String XML_DTD_DECLARATION = "<!DOCTYPE compiler PUBLIC \"-//Eclipse.org//DTD Eclipse JDT 3.2.004 Compiler//EN\" \"http://www.eclipse.org/jdt/core/compiler_32_004.dtd\">"; //$NON-NLS-1$
+		static {
+			try {
+				Class c = IProblem.class;
+				Field[] fields = c.getFields();
+				for (int i = 0, max = fields.length; i < max; i++) {
+					Field field = fields[i];
+					if (field.getType().equals(Integer.TYPE)) {
+						Integer value = (Integer) field.get(null);
+						int key2 = value.intValue() & IProblem.IgnoreCategoriesMask;
+						if (key2 == 0) {
+							key2 = Integer.MAX_VALUE;
+						}
+						Logger.FIELD_TABLE.put(key2, field.getName());
+					}
+				}
+			} catch (SecurityException e) {
+				e.printStackTrace();
+			} catch (IllegalArgumentException e) {
+				e.printStackTrace();
+			} catch (IllegalAccessException e) {
+				e.printStackTrace();
+			}
+		}
+		public Logger(Main main, PrintWriter out, PrintWriter err) {
+			this.out = out;
+			this.err = err;
+			this.parameters = new HashMap();
+			this.main = main;
+		}
+
+		public String buildFileName(
+			String outputPath,
+			String relativeFileName) {
+			char fileSeparatorChar = File.separatorChar;
+			String fileSeparator = File.separator;
+
+			outputPath = outputPath.replace('/', fileSeparatorChar);
+			// To be able to pass the mkdirs() method we need to remove the extra file separator at the end of the outDir name
+			StringBuffer outDir = new StringBuffer(outputPath);
+			if (!outputPath.endsWith(fileSeparator)) {
+				outDir.append(fileSeparator);
+			}
+			StringTokenizer tokenizer =
+				new StringTokenizer(relativeFileName, fileSeparator);
+			String token = tokenizer.nextToken();
+			while (tokenizer.hasMoreTokens()) {
+				outDir.append(token).append(fileSeparator);
+				token = tokenizer.nextToken();
+			}
+			// token contains the last one
+			return outDir.append(token).toString();
+		}
+
+		public void close() {
+			if (this.log != null) {
+				if ((this.tagBits & Logger.XML) != 0) {
+					endTag(Logger.COMPILER);
+					flush();
+				}
+				this.log.close();
+			}
+		}
+
+		/**
+		 *
+		 */
+		public void compiling() {
+			printlnOut(this.main.bind("progress.compiling")); //$NON-NLS-1$
+		}
+		private void endLoggingExtraProblems() {
+			endTag(Logger.EXTRA_PROBLEMS);
+		}
+		/**
+		 * Used to stop logging problems.
+		 * Only use in xml mode.
+		 */
+		private void endLoggingProblems() {
+			endTag(Logger.PROBLEMS);
+		}
+		public void endLoggingSource() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				endTag(Logger.SOURCE);
+			}
+		}
+
+		public void endLoggingSources() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				endTag(Logger.SOURCES);
+			}
+		}
+
+		public void endLoggingTasks() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				endTag(Logger.TASKS);
+			}
+		}
+		private void endTag(String name) {
+			if (this.log != null) {
+				((GenericXMLWriter) this.log).endTag(name, true, true);
+			}
+		}
+		private String errorReportSource(CategorizedProblem problem, char[] unitSource, int bits) {
+			//extra from the source the innacurate     token
+			//and "highlight" it using some underneath ^^^^^
+			//put some context around too.
+
+			//this code assumes that the font used in the console is fixed size
+
+			//sanity .....
+			int startPosition = problem.getSourceStart();
+			int endPosition = problem.getSourceEnd();
+			if (unitSource == null) {
+				if (problem.getOriginatingFileName() != null) {
+					try {
+						unitSource = Util.getFileCharContent(new File(new String(problem.getOriginatingFileName())), null);
+					} catch (IOException e) {
+						// ignore;
+					}
+				}
+			}
+>>>>>>> patch
 			int length;
 			if ((startPosition > endPosition)
 				|| ((startPosition < 0) && (endPosition < 0))
@@ -628,6 +908,7 @@ public class Main implements ProblemSeverities, SuffixConstants {
 				}
 			}
 		}
+<<<<<<< HEAD
 
 		public void loggingExtraProblems(Main currentMain) {
 			ArrayList problems = currentMain.extraProblems;
@@ -1332,6 +1613,712 @@ public class Main implements ProblemSeverities, SuffixConstants {
 	public Logger logger;
 	public int maxProblems;
 	public Map options;
+=======
+
+		public void loggingExtraProblems(Main currentMain) {
+			ArrayList problems = currentMain.extraProblems;
+			final int count = problems.size();
+			int localProblemCount = 0;
+			if (count != 0) {
+				int errors = 0;
+				int warnings = 0;
+				for (int i = 0; i < count; i++) {
+					CategorizedProblem problem = (CategorizedProblem) problems.get(i);
+					if (problem != null) {
+						currentMain.globalProblemsCount++;
+						logExtraProblem(problem, localProblemCount, currentMain.globalProblemsCount);
+						localProblemCount++;
+						if (problem.isError()) {
+							errors++;
+							currentMain.globalErrorsCount++;
+						} else if (problem.isWarning()) {
+							currentMain.globalWarningsCount++;
+							warnings++;
+						}
+					}
+				}
+				if ((this.tagBits & Logger.XML) != 0) {
+					if ((errors + warnings) != 0) {
+						startLoggingExtraProblems(count);
+						for (int i = 0; i < count; i++) {
+							CategorizedProblem problem = (CategorizedProblem) problems.get(i);
+							if (problem!= null) {
+								if (problem.getID() != IProblem.Task) {
+									logXmlExtraProblem(problem, localProblemCount, currentMain.globalProblemsCount);
+								}
+							}
+						}
+						endLoggingExtraProblems();
+					}
+				}
+			}
+		}
+
+		public void logIncorrectVMVersionForAnnotationProcessing() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.MESSAGE, this.main.bind("configure.incorrectVMVersionforAPT")); //$NON-NLS-1$
+				printTag(Logger.ERROR_TAG, this.parameters, true, true);
+			}
+			this.printlnErr(this.main.bind("configure.incorrectVMVersionforAPT")); //$NON-NLS-1$
+		}
+
+		/**
+		 *
+		 */
+		public void logNoClassFileCreated(String outputDir, String relativeFileName, IOException e) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.MESSAGE, this.main.bind("output.noClassFileCreated", //$NON-NLS-1$
+					new String[] {
+						outputDir,
+						relativeFileName,
+						e.getMessage()
+					}));
+				printTag(Logger.ERROR_TAG, this.parameters, true, true);
+			}
+			this.printlnErr(this.main.bind("output.noClassFileCreated", //$NON-NLS-1$
+				new String[] {
+					outputDir,
+					relativeFileName,
+					e.getMessage()
+				}));
+		}
+
+		/**
+		 * @param exportedClassFilesCounter
+		 */
+		public void logNumberOfClassFilesGenerated(int exportedClassFilesCounter) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.VALUE, new Integer(exportedClassFilesCounter));
+				printTag(Logger.NUMBER_OF_CLASSFILES, this.parameters, true, true);
+			}
+			if (exportedClassFilesCounter == 1) {
+				printlnOut(this.main.bind("compile.oneClassFileGenerated")); //$NON-NLS-1$
+			} else {
+				printlnOut(this.main.bind("compile.severalClassFilesGenerated", //$NON-NLS-1$
+					String.valueOf(exportedClassFilesCounter)));
+			}
+		}
+
+		/**
+		 * @param options the given compiler options
+		 */
+		public void logOptions(Map options) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				printTag(Logger.OPTIONS, null, true, false);
+				final Set entriesSet = options.entrySet();
+				Object[] entries = entriesSet.toArray();
+				Arrays.sort(entries, new Comparator() {
+					public int compare(Object o1, Object o2) {
+						Map.Entry entry1 = (Map.Entry) o1;
+						Map.Entry entry2 = (Map.Entry) o2;
+						return ((String) entry1.getKey()).compareTo((String) entry2.getKey());
+					}
+				});
+				for (int i = 0, max = entries.length; i < max; i++) {
+					Map.Entry entry = (Map.Entry) entries[i];
+					String key = (String) entry.getKey();
+					this.parameters.put(Logger.KEY, key);
+					this.parameters.put(Logger.VALUE, entry.getValue());
+					printTag(Logger.OPTION, this.parameters, true, true);
+				}
+				endTag(Logger.OPTIONS);
+			}
+		}
+
+		/**
+		 * @param error the given error
+		 */
+		public void logPendingError(String error) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.MESSAGE, error);
+				printTag(Logger.ERROR_TAG, this.parameters, true, true);
+			}
+			this.printlnErr(error);
+		}
+
+		/**
+		 * @param message the given message
+		 */
+		public void logWarning(String message) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.MESSAGE, message);
+				printTag(Logger.WARNING_TAG, this.parameters, true, true);
+			}
+			this.printlnOut(message);
+		}
+
+		private void logProblem(CategorizedProblem problem, int localErrorCount,
+			int globalErrorCount, char[] unitSource) {
+			if ((this.tagBits & Logger.EMACS) != 0) {
+				String result = (new String(problem.getOriginatingFileName())
+						+ ":" //$NON-NLS-1$
+						+ problem.getSourceLineNumber()
+						+ ": " //$NON-NLS-1$
+						+ (problem.isError() ? this.main.bind("output.emacs.error") : this.main.bind("output.emacs.warning")) //$NON-NLS-1$ //$NON-NLS-2$
+						+ ": " //$NON-NLS-1$
+						+ problem.getMessage());
+				this.printlnErr(result);
+				final String errorReportSource = errorReportSource(problem, unitSource, this.tagBits);
+				if (errorReportSource.length() != 0) this.printlnErr(errorReportSource);
+			} else {
+				if (localErrorCount == 0) {
+					this.printlnErr("----------"); //$NON-NLS-1$
+				}
+				printErr(problem.isError() ?
+						this.main.bind(
+								"requestor.error", //$NON-NLS-1$
+								Integer.toString(globalErrorCount),
+								new String(problem.getOriginatingFileName()))
+								: this.main.bind(
+										"requestor.warning", //$NON-NLS-1$
+										Integer.toString(globalErrorCount),
+										new String(problem.getOriginatingFileName())));
+				try {
+					final String errorReportSource = errorReportSource(problem, unitSource, 0);
+					this.printlnErr(errorReportSource);
+					this.printlnErr(problem.getMessage());
+				} catch (Exception e) {
+					this.printlnErr(this.main.bind(
+						"requestor.notRetrieveErrorMessage", problem.toString())); //$NON-NLS-1$
+				}
+				this.printlnErr("----------"); //$NON-NLS-1$
+			}
+		}
+
+		public int logProblems(CategorizedProblem[] problems, char[] unitSource, Main currentMain) {
+			final int count = problems.length;
+			int localErrorCount = 0;
+			int localProblemCount = 0;
+			if (count != 0) {
+				int errors = 0;
+				int warnings = 0;
+				int tasks = 0;
+				for (int i = 0; i < count; i++) {
+					CategorizedProblem problem = problems[i];
+					if (problem != null) {
+						currentMain.globalProblemsCount++;
+						logProblem(problem, localProblemCount, currentMain.globalProblemsCount, unitSource);
+						localProblemCount++;
+						if (problem.isError()) {
+							localErrorCount++;
+							errors++;
+							currentMain.globalErrorsCount++;
+						} else if (problem.getID() == IProblem.Task) {
+							currentMain.globalTasksCount++;
+							tasks++;
+						} else {
+							currentMain.globalWarningsCount++;
+							warnings++;
+						}
+					}
+				}
+				if ((this.tagBits & Logger.XML) != 0) {
+					if ((errors + warnings) != 0) {
+						startLoggingProblems(errors, warnings);
+						for (int i = 0; i < count; i++) {
+							CategorizedProblem problem = problems[i];
+							if (problem!= null) {
+								if (problem.getID() != IProblem.Task) {
+									logXmlProblem(problem, unitSource);
+								}
+							}
+						}
+						endLoggingProblems();
+					}
+					if (tasks != 0) {
+						startLoggingTasks(tasks);
+						for (int i = 0; i < count; i++) {
+							CategorizedProblem problem = problems[i];
+							if (problem!= null) {
+								if (problem.getID() == IProblem.Task) {
+									logXmlTask(problem, unitSource);
+								}
+							}
+						}
+						endLoggingTasks();
+					}
+				}
+			}
+			return localErrorCount;
+		}
+
+		/**
+		 * @param globalProblemsCount
+		 * @param globalErrorsCount
+		 * @param globalWarningsCount
+		 */
+		public void logProblemsSummary(int globalProblemsCount,
+			int globalErrorsCount, int globalWarningsCount, int globalTasksCount) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				// generate xml
+				this.parameters.put(Logger.NUMBER_OF_PROBLEMS, new Integer(globalProblemsCount));
+				this.parameters.put(Logger.NUMBER_OF_ERRORS, new Integer(globalErrorsCount));
+				this.parameters.put(Logger.NUMBER_OF_WARNINGS, new Integer(globalWarningsCount));
+				this.parameters.put(Logger.NUMBER_OF_TASKS, new Integer(globalTasksCount));
+				printTag(Logger.PROBLEM_SUMMARY, this.parameters, true, true);
+			}
+			if (globalProblemsCount == 1) {
+				String message = null;
+				if (globalErrorsCount == 1) {
+					message = this.main.bind("compile.oneError"); //$NON-NLS-1$
+				} else {
+					message = this.main.bind("compile.oneWarning"); //$NON-NLS-1$
+				}
+				printErr(this.main.bind("compile.oneProblem", message)); //$NON-NLS-1$
+			} else {
+				String errorMessage = null;
+				String warningMessage = null;
+				if (globalErrorsCount > 0) {
+					if (globalErrorsCount == 1) {
+						errorMessage = this.main.bind("compile.oneError"); //$NON-NLS-1$
+					} else {
+						errorMessage = this.main.bind("compile.severalErrors", String.valueOf(globalErrorsCount)); //$NON-NLS-1$
+					}
+				}
+				int warningsNumber = globalWarningsCount + globalTasksCount;
+				if (warningsNumber > 0) {
+					if (warningsNumber == 1) {
+						warningMessage = this.main.bind("compile.oneWarning"); //$NON-NLS-1$
+					} else {
+						warningMessage = this.main.bind("compile.severalWarnings", String.valueOf(warningsNumber)); //$NON-NLS-1$
+					}
+				}
+				if (errorMessage == null || warningMessage == null) {
+					if (errorMessage == null) {
+						printErr(this.main.bind(
+							"compile.severalProblemsErrorsOrWarnings", //$NON-NLS-1$
+							String.valueOf(globalProblemsCount),
+							warningMessage));
+					} else {
+						printErr(this.main.bind(
+							"compile.severalProblemsErrorsOrWarnings", //$NON-NLS-1$
+							String.valueOf(globalProblemsCount),
+							errorMessage));
+					}
+				} else {
+					printErr(this.main.bind(
+						"compile.severalProblemsErrorsAndWarnings", //$NON-NLS-1$
+						new String[] {
+							String.valueOf(globalProblemsCount),
+							errorMessage,
+							warningMessage
+						}));
+				}
+			}
+			if ((this.tagBits & Logger.EMACS) != 0) {
+				this.printlnErr();
+			}
+		}
+
+		/**
+		 *
+		 */
+		public void logProgress() {
+			printOut('.');
+		}
+
+		/**
+		 * @param i
+		 *            the current repetition number
+		 * @param repetitions
+		 *            the given number of repetitions
+		 */
+		public void logRepetition(int i, int repetitions) {
+			printlnOut(this.main.bind("compile.repetition", //$NON-NLS-1$
+				String.valueOf(i + 1), String.valueOf(repetitions)));
+		}
+		/**
+		 * @param compilerStats
+		 */
+		public void logTiming(CompilerStats compilerStats) {
+			long time = compilerStats.elapsedTime();
+			long lineCount = compilerStats.lineCount;
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.VALUE, new Long(time));
+				printTag(Logger.TIME, this.parameters, true, true);
+				this.parameters.put(Logger.VALUE, new Long(lineCount));
+				printTag(Logger.NUMBER_OF_LINES, this.parameters, true, true);
+			}
+			if (lineCount != 0) {
+				printlnOut(
+					this.main.bind("compile.instantTime", //$NON-NLS-1$
+						new String[] {
+							String.valueOf(lineCount),
+							String.valueOf(time),
+							String.valueOf(((int) (lineCount * 10000.0 / time)) / 10.0),
+						}));
+			} else {
+				printlnOut(
+					this.main.bind("compile.totalTime", //$NON-NLS-1$
+						new String[] {
+							String.valueOf(time),
+						}));
+			}
+			if ((this.main.timing & Main.TIMING_DETAILED) != 0) {
+				printlnOut(
+						this.main.bind("compile.detailedTime", //$NON-NLS-1$
+							new String[] {
+								String.valueOf(compilerStats.parseTime),
+								String.valueOf(((int) (compilerStats.parseTime * 1000.0 / time)) / 10.0),
+								String.valueOf(compilerStats.resolveTime),
+								String.valueOf(((int) (compilerStats.resolveTime * 1000.0 / time)) / 10.0),
+								String.valueOf(compilerStats.analyzeTime),
+								String.valueOf(((int) (compilerStats.analyzeTime * 1000.0 / time)) / 10.0),
+								String.valueOf(compilerStats.generateTime),
+								String.valueOf(((int) (compilerStats.generateTime * 1000.0 / time)) / 10.0),
+							}));
+			}
+		}
+
+		/**
+		 * Print the usage of the compiler
+		 * @param usage
+		 */
+		public void logUsage(String usage) {
+			printlnOut(usage);
+		}
+
+		/**
+		 * Print the version of the compiler in the log and/or the out field
+		 */
+		public void logVersion(final boolean printToOut) {
+			if (this.log != null && (this.tagBits & Logger.XML) == 0) {
+				final String version = this.main.bind("misc.version", //$NON-NLS-1$
+					new String[] {
+						this.main.bind("compiler.name"), //$NON-NLS-1$
+						this.main.bind("compiler.version"), //$NON-NLS-1$
+						this.main.bind("compiler.copyright") //$NON-NLS-1$
+					}
+				);
+				this.log.println("# " + version); //$NON-NLS-1$
+				if (printToOut) {
+					this.out.println(version);
+					this.out.flush();
+				}
+			} else if (printToOut) {
+				final String version = this.main.bind("misc.version", //$NON-NLS-1$
+					new String[] {
+						this.main.bind("compiler.name"), //$NON-NLS-1$
+						this.main.bind("compiler.version"), //$NON-NLS-1$
+						this.main.bind("compiler.copyright") //$NON-NLS-1$
+					}
+				);
+				this.out.println(version);
+				this.out.flush();
+			}
+		}
+
+		/**
+		 * Print the usage of wrong JDK
+		 */
+		public void logWrongJDK() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.MESSAGE, this.main.bind("configure.requiresJDK1.2orAbove")); //$NON-NLS-1$
+				printTag(Logger.ERROR, this.parameters, true, true);
+			}
+			this.printlnErr(this.main.bind("configure.requiresJDK1.2orAbove")); //$NON-NLS-1$
+		}
+
+		private void logXmlExtraProblem(CategorizedProblem problem, int globalErrorCount, int localErrorCount) {
+			final int sourceStart = problem.getSourceStart();
+			final int sourceEnd = problem.getSourceEnd();
+			boolean isError = problem.isError();
+			this.parameters.put(Logger.PROBLEM_SEVERITY, isError ? Logger.ERROR : Logger.WARNING);
+			this.parameters.put(Logger.PROBLEM_LINE, new Integer(problem.getSourceLineNumber()));
+			this.parameters.put(Logger.PROBLEM_SOURCE_START, new Integer(sourceStart));
+			this.parameters.put(Logger.PROBLEM_SOURCE_END, new Integer(sourceEnd));
+			printTag(Logger.EXTRA_PROBLEM_TAG, this.parameters, true, false);
+			this.parameters.put(Logger.VALUE, problem.getMessage());
+			printTag(Logger.PROBLEM_MESSAGE, this.parameters, true, true);
+			extractContext(problem, null);
+			endTag(Logger.EXTRA_PROBLEM_TAG);
+		}
+		/**
+		 * @param problem
+		 *            the given problem to log
+		 * @param unitSource
+		 *            the given unit source
+		 */
+		private void logXmlProblem(CategorizedProblem problem, char[] unitSource) {
+			final int sourceStart = problem.getSourceStart();
+			final int sourceEnd = problem.getSourceEnd();
+			final int id = problem.getID();
+			this.parameters.put(Logger.ID, getFieldName(id)); // ID as field name
+			this.parameters.put(Logger.PROBLEM_ID, new Integer(id)); // ID as numeric value
+			boolean isError = problem.isError();
+			int severity = isError ? ProblemSeverities.Error : ProblemSeverities.Warning;
+			this.parameters.put(Logger.PROBLEM_SEVERITY, isError ? Logger.ERROR : Logger.WARNING);
+			this.parameters.put(Logger.PROBLEM_LINE, new Integer(problem.getSourceLineNumber()));
+			this.parameters.put(Logger.PROBLEM_SOURCE_START, new Integer(sourceStart));
+			this.parameters.put(Logger.PROBLEM_SOURCE_END, new Integer(sourceEnd));
+			String problemOptionKey = getProblemOptionKey(id);
+			if (problemOptionKey != null) {
+				this.parameters.put(Logger.PROBLEM_OPTION_KEY, problemOptionKey);
+			}
+			int categoryID = ProblemReporter.getProblemCategory(severity, id);
+			this.parameters.put(Logger.PROBLEM_CATEGORY_ID, new Integer(categoryID));
+			printTag(Logger.PROBLEM_TAG, this.parameters, true, false);
+			this.parameters.put(Logger.VALUE, problem.getMessage());
+			printTag(Logger.PROBLEM_MESSAGE, this.parameters, true, true);
+			extractContext(problem, unitSource);
+			String[] arguments = problem.getArguments();
+			final int length = arguments.length;
+			if (length != 0) {
+				printTag(Logger.PROBLEM_ARGUMENTS, null, true, false);
+				for (int i = 0; i < length; i++) {
+					this.parameters.put(Logger.PROBLEM_ARGUMENT_VALUE, arguments[i]);
+					printTag(Logger.PROBLEM_ARGUMENT, this.parameters, true, true);
+				}
+				endTag(Logger.PROBLEM_ARGUMENTS);
+			}
+			endTag(Logger.PROBLEM_TAG);
+		}
+		/**
+		 * @param problem
+		 *            the given problem to log
+		 * @param unitSource
+		 *            the given unit source
+		 */
+		private void logXmlTask(CategorizedProblem problem, char[] unitSource) {
+			this.parameters.put(Logger.PROBLEM_LINE, new Integer(problem.getSourceLineNumber()));
+			this.parameters.put(Logger.PROBLEM_SOURCE_START, new Integer(problem.getSourceStart()));
+			this.parameters.put(Logger.PROBLEM_SOURCE_END, new Integer(problem.getSourceEnd()));
+			String problemOptionKey = getProblemOptionKey(problem.getID());
+			if (problemOptionKey != null) {
+				this.parameters.put(Logger.PROBLEM_OPTION_KEY, problemOptionKey);
+			}
+			printTag(Logger.TASK, this.parameters, true, false);
+			this.parameters.put(Logger.VALUE, problem.getMessage());
+			printTag(Logger.PROBLEM_MESSAGE, this.parameters, true, true);
+			extractContext(problem, unitSource);
+			endTag(Logger.TASK);
+		}
+
+		private void printErr(String s) {
+			this.err.print(s);
+			if ((this.tagBits & Logger.XML) == 0 && this.log != null) {
+				this.log.print(s);
+			}
+		}
+
+		private void printlnErr() {
+			this.err.println();
+			if ((this.tagBits & Logger.XML) == 0 && this.log != null) {
+				this.log.println();
+			}
+		}
+
+		private void printlnErr(String s) {
+			this.err.println(s);
+			if ((this.tagBits & Logger.XML) == 0 && this.log != null) {
+				this.log.println(s);
+			}
+		}
+
+		private void printlnOut(String s) {
+			this.out.println(s);
+			if ((this.tagBits & Logger.XML) == 0 && this.log != null) {
+				this.log.println(s);
+			}
+		}
+
+		/**
+		 *
+		 */
+		public void printNewLine() {
+			this.out.println();
+		}
+
+		private void printOut(char c) {
+			this.out.print(c);
+		}
+
+		public void printStats() {
+			final boolean isTimed = (this.main.timing & TIMING_ENABLED) != 0;
+			if ((this.tagBits & Logger.XML) != 0) {
+				printTag(Logger.STATS, null, true, false);
+			}
+			if (isTimed) {
+				CompilerStats compilerStats = this.main.batchCompiler.stats;
+				compilerStats.startTime = this.main.startTime; // also include batch initialization times
+				compilerStats.endTime = System.currentTimeMillis(); // also include batch output times
+				logTiming(compilerStats);
+			}
+			if (this.main.globalProblemsCount > 0) {
+				logProblemsSummary(this.main.globalProblemsCount, this.main.globalErrorsCount, this.main.globalWarningsCount, this.main.globalTasksCount);
+			}
+			if (this.main.exportedClassFilesCounter != 0
+					&& (this.main.showProgress || isTimed || this.main.verbose)) {
+				logNumberOfClassFilesGenerated(this.main.exportedClassFilesCounter);
+			}
+			if ((this.tagBits & Logger.XML) != 0) {
+				endTag(Logger.STATS);
+			}
+		}
+
+		private void printTag(String name, HashMap params, boolean insertNewLine, boolean closeTag) {
+			if (this.log != null) {
+				((GenericXMLWriter) this.log).printTag(name, this.parameters, true, insertNewLine, closeTag);
+			}
+			this.parameters.clear();
+		}
+
+		public void setEmacs() {
+			this.tagBits |= Logger.EMACS;
+		}
+		public void setLog(String logFileName) {
+			final Date date = new Date();
+			final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.LONG, Locale.getDefault());
+			try {
+				int index = logFileName.lastIndexOf('.');
+				if (index != -1) {
+					if (logFileName.substring(index).toLowerCase().equals(".xml")) { //$NON-NLS-1$
+						this.log = new GenericXMLWriter(new OutputStreamWriter(new FileOutputStream(logFileName, false), Util.UTF_8), Util.LINE_SEPARATOR, true);
+						this.tagBits |= Logger.XML;
+						// insert time stamp as comment
+						this.log.println("<!-- " + dateFormat.format(date) + " -->");//$NON-NLS-1$//$NON-NLS-2$
+						this.log.println(Logger.XML_DTD_DECLARATION);
+						this.parameters.put(Logger.COMPILER_NAME, this.main.bind("compiler.name")); //$NON-NLS-1$
+						this.parameters.put(Logger.COMPILER_VERSION, this.main.bind("compiler.version")); //$NON-NLS-1$
+						this.parameters.put(Logger.COMPILER_COPYRIGHT, this.main.bind("compiler.copyright")); //$NON-NLS-1$
+						printTag(Logger.COMPILER, this.parameters, true, false);
+					} else {
+						this.log = new PrintWriter(new FileOutputStream(logFileName, false));
+						this.log.println("# " + dateFormat.format(date));//$NON-NLS-1$
+					}
+				} else {
+					this.log = new PrintWriter(new FileOutputStream(logFileName, false));
+					this.log.println("# " + dateFormat.format(date));//$NON-NLS-1$
+				}
+			} catch (FileNotFoundException e) {
+				throw new IllegalArgumentException(this.main.bind("configure.cannotOpenLog", logFileName)); //$NON-NLS-1$
+			} catch (UnsupportedEncodingException e) {
+				throw new IllegalArgumentException(this.main.bind("configure.cannotOpenLogInvalidEncoding", logFileName)); //$NON-NLS-1$
+			}
+		}
+		private void startLoggingExtraProblems(int count) {
+			this.parameters.put(Logger.NUMBER_OF_PROBLEMS, new Integer(count));
+			printTag(Logger.EXTRA_PROBLEMS, this.parameters, true, false);
+		}
+
+		/**
+		 * Used to start logging problems.
+		 * Only use in xml mode.
+		 */
+		private void startLoggingProblems(int errors, int warnings) {
+			this.parameters.put(Logger.NUMBER_OF_PROBLEMS, new Integer(errors + warnings));
+			this.parameters.put(Logger.NUMBER_OF_ERRORS, new Integer(errors));
+			this.parameters.put(Logger.NUMBER_OF_WARNINGS, new Integer(warnings));
+			printTag(Logger.PROBLEMS, this.parameters, true, false);
+		}
+
+		public void startLoggingSource(CompilationResult compilationResult) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				ICompilationUnit compilationUnit = compilationResult.compilationUnit;
+				if (compilationUnit != null) {
+    				char[] fileName = compilationUnit.getFileName();
+    				File f = new File(new String(fileName));
+    				if (fileName != null) {
+    					this.parameters.put(Logger.PATH, f.getAbsolutePath());
+    				}
+    				char[][] packageName = compilationResult.packageName;
+    				if (packageName != null) {
+    					this.parameters.put(
+    							Logger.PACKAGE,
+    							new String(CharOperation.concatWith(packageName, File.separatorChar)));
+    				}
+    				CompilationUnit unit = (CompilationUnit) compilationUnit;
+    				String destinationPath = unit.destinationPath;
+					if (destinationPath == null) {
+						destinationPath = this.main.destinationPath;
+					}
+					if (destinationPath != null && destinationPath != NONE) {
+						if (File.separatorChar == '/') {
+							this.parameters.put(Logger.OUTPUT, destinationPath);
+						} else {
+							this.parameters.put(Logger.OUTPUT, destinationPath.replace('/', File.separatorChar));
+						}
+					}
+				}
+				printTag(Logger.SOURCE, this.parameters, true, false);
+			}
+		}
+
+		public void startLoggingSources() {
+			if ((this.tagBits & Logger.XML) != 0) {
+				printTag(Logger.SOURCES, null, true, false);
+			}
+		}
+
+		public void startLoggingTasks(int tasks) {
+			if ((this.tagBits & Logger.XML) != 0) {
+				this.parameters.put(Logger.NUMBER_OF_TASKS, new Integer(tasks));
+				printTag(Logger.TASKS, this.parameters, true, false);
+			}
+		}
+	}
+
+	/**
+	 * Resource bundle factory to share bundles for the same locale
+	 */
+	public static class ResourceBundleFactory {
+		private static HashMap Cache = new HashMap();
+		public static synchronized ResourceBundle getBundle(Locale locale) {
+			ResourceBundle bundle = (ResourceBundle) Cache.get(locale);
+			if (bundle == null) {
+				bundle = ResourceBundle.getBundle(Main.bundleName, locale);
+				Cache.put(locale, bundle);
+			}
+			return bundle;
+		}
+	}
+	// javadoc analysis tuning
+	boolean enableJavadocOn;
+
+	boolean warnJavadocOn;
+	boolean warnAllJavadocOn;
+
+	public Compiler batchCompiler;
+	/* Bundle containing messages */
+	public ResourceBundle bundle;
+	protected FileSystem.Classpath[] checkedClasspaths;
+
+	public Locale compilerLocale;
+	public CompilerOptions compilerOptions; // read-only
+	public CompilationProgress progress;
+	public String destinationPath;
+	public String[] destinationPaths;
+	// destination path for compilation units that get no more specific
+	// one (through directory arguments or various classpath options);
+	// coding is:
+	// == null: unspecified, write class files close to their respective
+	//          source files;
+	// == Main.NONE: absorbent element, do not output class files;
+	// else: use as the path of the directory into which class files must
+	//       be written.
+	private boolean didSpecifySource;
+	private boolean didSpecifyTarget;
+	public String[] encodings;
+	public int exportedClassFilesCounter;
+	public String[] filenames;
+	public String[] classNames;
+	// overrides of destinationPath on a directory argument basis
+	public int globalErrorsCount;
+	public int globalProblemsCount;
+	public int globalTasksCount;
+	public int globalWarningsCount;
+
+	private File javaHomeCache;
+
+	private boolean javaHomeChecked = false;
+	public long lineCount0;
+
+	public String log;
+
+	public Logger logger;
+	public int maxProblems;
+	public Map options;
+>>>>>>> patch
 	public char[][] ignoreOptionalProblemsFromFolders;
 	protected PrintWriter out;
 	public boolean proceed = true;
@@ -1355,6 +2342,7 @@ public class Main implements ProblemSeverities, SuffixConstants {
 	private PrintWriter err;
 
 	protected ArrayList extraProblems;
+<<<<<<< HEAD
 	public final static String bundleName = "org.eclipse.jdt.internal.compiler.batch.messages"; //$NON-NLS-1$
 	// two uses: recognize 'none' in options; code the singleton none
 	// for the '-d none' option (wherever it may be found)
@@ -1644,6 +2632,297 @@ private boolean checkVMVersion(long minimalSupportedVersion) {
 		return false;
 	}
 	switch(majorVersion) {
+=======
+	public final static String bundleName = "org.eclipse.jdt.internal.compiler.batch.messages"; //$NON-NLS-1$
+	// two uses: recognize 'none' in options; code the singleton none
+	// for the '-d none' option (wherever it may be found)
+	public static final int DEFAULT_SIZE_CLASSPATH = 4;
+
+	public static final String NONE = "none"; //$NON-NLS-1$
+
+/**
+ * @deprecated - use {@link BatchCompiler#compile(String, PrintWriter, PrintWriter, CompilationProgress)} instead
+ * 						  e.g. BatchCompiler.compile(commandLine, new PrintWriter(System.out), new PrintWriter(System.err), null);
+ */
+public static boolean compile(String commandLine) {
+	return new Main(new PrintWriter(System.out), new PrintWriter(System.err), false /* systemExit */, null /* options */, null /* progress */).compile(tokenize(commandLine));
+}
+
+/**
+ * @deprecated - use {@link BatchCompiler#compile(String, PrintWriter, PrintWriter, CompilationProgress)} instead
+ *                       e.g. BatchCompiler.compile(commandLine, outWriter, errWriter, null);
+ */
+public static boolean compile(String commandLine, PrintWriter outWriter, PrintWriter errWriter) {
+	return new Main(outWriter, errWriter, false /* systemExit */, null /* options */, null /* progress */).compile(tokenize(commandLine));
+}
+
+/*
+ * Internal API for public API BatchCompiler#compile(String[], PrintWriter, PrintWriter, CompilationProgress)
+ */
+public static boolean compile(String[] commandLineArguments, PrintWriter outWriter, PrintWriter errWriter, CompilationProgress progress) {
+	return new Main(outWriter, errWriter, false /* systemExit */, null /* options */, progress).compile(commandLineArguments);
+}
+public static File[][] getLibrariesFiles(File[] files) {
+	FilenameFilter filter = new FilenameFilter() {
+		public boolean accept(File dir, String name) {
+			return Util.isPotentialZipArchive(name);
+		}
+	};
+	final int filesLength = files.length;
+	File[][] result = new File[filesLength][];
+	for (int i = 0; i < filesLength; i++) {
+		File currentFile = files[i];
+		if (currentFile.exists() && currentFile.isDirectory()) {
+			result[i] = currentFile.listFiles(filter);
+		}
+	}
+	return result;
+}
+
+public static void main(String[] argv) {
+	new Main(new PrintWriter(System.out), new PrintWriter(System.err), true/*systemExit*/, null/*options*/, null/*progress*/).compile(argv);
+}
+
+public static String[] tokenize(String commandLine) {
+
+	int count = 0;
+	String[] arguments = new String[10];
+	StringTokenizer tokenizer = new StringTokenizer(commandLine, " \"", true); //$NON-NLS-1$
+	String token = Util.EMPTY_STRING;
+	boolean insideQuotes = false;
+	boolean startNewToken = true;
+
+	// take care to quotes on the command line
+	// 'xxx "aaa bbb";ccc yyy' --->  {"xxx", "aaa bbb;ccc", "yyy" }
+	// 'xxx "aaa bbb;ccc" yyy' --->  {"xxx", "aaa bbb;ccc", "yyy" }
+	// 'xxx "aaa bbb";"ccc" yyy' --->  {"xxx", "aaa bbb;ccc", "yyy" }
+	// 'xxx/"aaa bbb";"ccc" yyy' --->  {"xxx/aaa bbb;ccc", "yyy" }
+	while (tokenizer.hasMoreTokens()) {
+		token = tokenizer.nextToken();
+
+		if (token.equals(" ")) { //$NON-NLS-1$
+			if (insideQuotes) {
+				arguments[count - 1] += token;
+				startNewToken = false;
+			} else {
+				startNewToken = true;
+			}
+		} else if (token.equals("\"")) { //$NON-NLS-1$
+			if (!insideQuotes && startNewToken) {
+				if (count == arguments.length)
+					System.arraycopy(arguments, 0, (arguments = new String[count * 2]), 0, count);
+				arguments[count++] = Util.EMPTY_STRING;
+			}
+			insideQuotes = !insideQuotes;
+			startNewToken = false;
+		} else {
+			if (insideQuotes) {
+				arguments[count - 1] += token;
+			} else {
+				if (token.length() > 0 && !startNewToken) {
+					arguments[count - 1] += token;
+				} else {
+					if (count == arguments.length)
+						System.arraycopy(arguments, 0, (arguments = new String[count * 2]), 0, count);
+					String trimmedToken = token.trim();
+					if (trimmedToken.length() != 0) {
+						arguments[count++] = trimmedToken;
+					}
+				}
+			}
+			startNewToken = false;
+		}
+	}
+	System.arraycopy(arguments, 0, arguments = new String[count], 0, count);
+	return arguments;
+}
+
+/**
+ * @deprecated - use {@link #Main(PrintWriter, PrintWriter, boolean, Map, CompilationProgress)} instead
+ *                       e.g. Main(outWriter, errWriter, systemExitWhenFinished, null, null)
+ */
+public Main(PrintWriter outWriter, PrintWriter errWriter, boolean systemExitWhenFinished) {
+	this(outWriter, errWriter, systemExitWhenFinished, null /* options */, null /* progress */);
+}
+
+/**
+ * @deprecated - use {@link #Main(PrintWriter, PrintWriter, boolean, Map, CompilationProgress)} instead
+ *                       e.g. Main(outWriter, errWriter, systemExitWhenFinished, customDefaultOptions, null)
+ */
+public Main(PrintWriter outWriter, PrintWriter errWriter, boolean systemExitWhenFinished, Map customDefaultOptions) {
+	this(outWriter, errWriter, systemExitWhenFinished, customDefaultOptions, null /* progress */);
+}
+
+public Main(PrintWriter outWriter, PrintWriter errWriter, boolean systemExitWhenFinished, Map customDefaultOptions, CompilationProgress compilationProgress) {
+	this.initialize(outWriter, errWriter, systemExitWhenFinished, customDefaultOptions, compilationProgress);
+	this.relocalize();
+}
+
+public void addExtraProblems(CategorizedProblem problem) {
+	if (this.extraProblems == null) {
+		this.extraProblems = new ArrayList();
+	}
+	this.extraProblems.add(problem);
+}
+protected void addNewEntry(ArrayList paths, String currentClasspathName,
+		ArrayList currentRuleSpecs, String customEncoding,
+		String destPath, boolean isSourceOnly,
+		boolean rejectDestinationPathOnJars) {
+
+	int rulesSpecsSize = currentRuleSpecs.size();
+	AccessRuleSet accessRuleSet = null;
+	if (rulesSpecsSize != 0) {
+		AccessRule[] accessRules = new AccessRule[currentRuleSpecs.size()];
+		boolean rulesOK = true;
+		Iterator i = currentRuleSpecs.iterator();
+		int j = 0;
+		while (i.hasNext()) {
+			String ruleSpec = (String) i.next();
+			char key = ruleSpec.charAt(0);
+			String pattern = ruleSpec.substring(1);
+			if (pattern.length() > 0) {
+				switch (key) {
+					case '+':
+						accessRules[j++] = new AccessRule(pattern
+								.toCharArray(), 0);
+						break;
+					case '~':
+						accessRules[j++] = new AccessRule(pattern
+								.toCharArray(),
+								IProblem.DiscouragedReference);
+						break;
+					case '-':
+						accessRules[j++] = new AccessRule(pattern
+								.toCharArray(),
+								IProblem.ForbiddenReference);
+						break;
+					case '?':
+						accessRules[j++] = new AccessRule(pattern
+								.toCharArray(),
+								IProblem.ForbiddenReference, true/*keep looking for accessible type*/);
+						break;
+					default:
+						rulesOK = false;
+				}
+			} else {
+				rulesOK = false;
+			}
+		}
+		if (rulesOK) {
+    		accessRuleSet = new AccessRuleSet(accessRules, AccessRestriction.COMMAND_LINE, currentClasspathName);
+		} else {
+			if (currentClasspathName.length() != 0) {
+				// we go on anyway
+				addPendingErrors(this.bind("configure.incorrectClasspath", currentClasspathName));//$NON-NLS-1$
+			}
+			return;
+		}
+	}
+	if (NONE.equals(destPath)) {
+		destPath = NONE; // keep == comparison valid
+	}
+	if (rejectDestinationPathOnJars && destPath != null &&
+			Util.isPotentialZipArchive(currentClasspathName)) {
+		throw new IllegalArgumentException(
+			this.bind("configure.unexpectedDestinationPathEntryFile", //$NON-NLS-1$
+						currentClasspathName));
+	}
+	FileSystem.Classpath currentClasspath = FileSystem.getClasspath(
+			currentClasspathName,
+			customEncoding,
+			isSourceOnly,
+			accessRuleSet,
+			destPath);
+	if (currentClasspath != null) {
+		paths.add(currentClasspath);
+	} else if (currentClasspathName.length() != 0) {
+		// we go on anyway
+		addPendingErrors(this.bind("configure.incorrectClasspath", currentClasspathName));//$NON-NLS-1$
+	}
+}
+void addPendingErrors(String message) {
+	if (this.pendingErrors == null) {
+		this.pendingErrors = new ArrayList();
+	}
+	this.pendingErrors.add(message);
+}
+/*
+ * Lookup the message with the given ID in this catalog
+ */
+public String bind(String id) {
+	return bind(id, (String[]) null);
+}
+/*
+ * Lookup the message with the given ID in this catalog and bind its
+ * substitution locations with the given string.
+ */
+public String bind(String id, String binding) {
+	return bind(id, new String[] { binding });
+}
+
+/*
+ * Lookup the message with the given ID in this catalog and bind its
+ * substitution locations with the given strings.
+ */
+public String bind(String id, String binding1, String binding2) {
+	return bind(id, new String[] { binding1, binding2 });
+}
+
+/*
+ * Lookup the message with the given ID in this catalog and bind its
+ * substitution locations with the given string values.
+ */
+public String bind(String id, String[] arguments) {
+	if (id == null)
+		return "No message available"; //$NON-NLS-1$
+	String message = null;
+	try {
+		message = this.bundle.getString(id);
+	} catch (MissingResourceException e) {
+		// If we got an exception looking for the message, fail gracefully by just returning
+		// the id we were looking for.  In most cases this is semi-informative so is not too bad.
+		return "Missing message: " + id + " in: " + Main.bundleName; //$NON-NLS-2$ //$NON-NLS-1$
+	}
+	return MessageFormat.format(message, arguments);
+}
+/**
+ * Return true if and only if the running VM supports the given minimal version.
+ *
+ * <p>This only checks the major version, since the minor version is always 0 (at least for the useful cases).</p>
+ * <p>The given minimalSupportedVersion is one of the constants:</p>
+ * <ul>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_1</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_2</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_3</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_4</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_5</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_6</code></li>
+ * <li><code>org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants.JDK1_7</code></li>
+ * </ul>
+ * @param minimalSupportedVersion the given minimal version
+ * @return true if and only if the running VM supports the given minimal version, false otherwise
+ */
+private boolean checkVMVersion(long minimalSupportedVersion) {
+	// the format of this property is supposed to be xx.x where x are digits.
+	String classFileVersion = System.getProperty("java.class.version"); //$NON-NLS-1$
+	if (classFileVersion == null) {
+		// by default we don't support a class file version we cannot recognize
+		return false;
+	}
+	int index = classFileVersion.indexOf('.');
+	if (index == -1) {
+		// by default we don't support a class file version we cannot recognize
+		return false;
+	}
+	int majorVersion;
+	try {
+		majorVersion = Integer.parseInt(classFileVersion.substring(0, index));
+	} catch (NumberFormatException e) {
+		// by default we don't support a class file version we cannot recognize
+		return false;
+	}
+	switch(majorVersion) {
+>>>>>>> patch
 		case ClassFileConstants.MAJOR_VERSION_1_1 : // 1.0 and 1.1
 			return ClassFileConstants.JDK1_1 >= minimalSupportedVersion;
 		case ClassFileConstants.MAJOR_VERSION_1_2 : // 1.2
@@ -1780,6 +3059,9 @@ public void configure(String[] argv) {
 	boolean didSpecifyDeprecation = false;
 	boolean didSpecifyCompliance = false;
 	boolean didSpecifyDisabledAnnotationProcessing = false;
+	// GROOVY start
+	boolean encounteredGroovySourceFile = false;
+	// GROOVY end
 
 	String customEncoding = null;
 	String customDestinationPath = null;
@@ -1879,6 +3161,7 @@ public void configure(String[] argv) {
 								} else {
 									this.ignoreOptionalProblemsFromFolders = currentFolders;
 								}
+<<<<<<< HEAD
 							} else {
 								throw new IllegalArgumentException(this.bind(
 										"configure.invalidNowarnOption", currentArg)); //$NON-NLS-1$
@@ -2244,6 +3527,369 @@ public void configure(String[] argv) {
 								this.options.put(
 									CompilerOptions.OPTION_SourceFileAttribute,
 									CompilerOptions.GENERATE);
+=======
+>>>>>>> patch
+							} else {
+								throw new IllegalArgumentException(this.bind(
+										"configure.invalidNowarnOption", currentArg)); //$NON-NLS-1$
+							}
+					}
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.startsWith("[")) { //$NON-NLS-1$
+					throw new IllegalArgumentException(
+						this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+									currentArg));
+				}
+
+				if (currentArg.endsWith("]")) { //$NON-NLS-1$
+					// look for encoding specification
+					int encodingStart = currentArg.indexOf('[') + 1;
+					if (encodingStart <= 1) {
+						throw new IllegalArgumentException(
+								this.bind("configure.unexpectedBracket", currentArg)); //$NON-NLS-1$
+					}
+					int encodingEnd = currentArg.length() - 1;
+					if (encodingStart >= 1) {
+						if (encodingStart < encodingEnd) {
+							customEncoding = currentArg.substring(encodingStart, encodingEnd);
+							try { // ensure encoding is supported
+								new InputStreamReader(new ByteArrayInputStream(new byte[0]), customEncoding);
+							} catch (UnsupportedEncodingException e) {
+								throw new IllegalArgumentException(
+									this.bind("configure.unsupportedEncoding", customEncoding)); //$NON-NLS-1$
+							}
+						}
+						currentArg = currentArg.substring(0, encodingStart - 1);
+					}
+				}
+
+
+				// GROOVY promote that suffix to a constant elsewhere - respect registered java like languages? (does that work for batch environment)
+				/* GROOVY change start: allow .groovy files through as source
+				// old code:{
+				if (currentArg.endsWith(SuffixConstants.SUFFIX_STRING_java)) {
+				}new code: */
+				if (currentArg.endsWith(SuffixConstants.SUFFIX_STRING_java) 
+					|| currentArg.endsWith(".groovy")) {				 //$NON-NLS-1$
+				
+					if (currentArg.endsWith(".groovy")) { //$NON-NLS-1$
+						encounteredGroovySourceFile = true;
+					}
+
+				// GROOVY change end
+					if (this.filenames == null) {
+						this.filenames = new String[argCount - index];
+						this.encodings = new String[argCount - index];
+						this.destinationPaths = new String[argCount - index];
+					} else if (filesCount == this.filenames.length) {
+						int length = this.filenames.length;
+						System.arraycopy(
+							this.filenames,
+							0,
+							(this.filenames = new String[length + argCount - index]),
+							0,
+							length);
+						System.arraycopy(
+							this.encodings,
+							0,
+							(this.encodings = new String[length + argCount - index]),
+							0,
+							length);
+						System.arraycopy(
+							this.destinationPaths,
+							0,
+							(this.destinationPaths = new String[length + argCount - index]),
+							0,
+							length);
+					}
+					this.filenames[filesCount] = currentArg;
+					this.encodings[filesCount++] = customEncoding;
+					// destination path cannot be specified upon an individual file
+					customEncoding = null;
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-log")) { //$NON-NLS-1$
+					if (this.log != null)
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateLog", currentArg)); //$NON-NLS-1$
+					mode = INSIDE_LOG;
+					continue;
+				}
+				if (currentArg.equals("-repeat")) { //$NON-NLS-1$
+					if (this.maxRepetition > 0)
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateRepeat", currentArg)); //$NON-NLS-1$
+					mode = INSIDE_REPETITION;
+					continue;
+				}
+				if (currentArg.equals("-maxProblems")) { //$NON-NLS-1$
+					if (this.maxProblems > 0)
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateMaxProblems", currentArg)); //$NON-NLS-1$
+					mode = INSIDE_MAX_PROBLEMS;
+					continue;
+				}
+				if (currentArg.equals("-source")) { //$NON-NLS-1$
+					mode = INSIDE_SOURCE;
+					continue;
+				}
+				if (currentArg.equals("-encoding")) { //$NON-NLS-1$
+					mode = INSIDE_DEFAULT_ENCODING;
+					continue;
+				}
+				if (currentArg.equals("-1.3")) { //$NON-NLS-1$
+					if (didSpecifyCompliance) {
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateCompliance", currentArg));//$NON-NLS-1$
+					}
+					didSpecifyCompliance = true;
+					this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_3);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-1.4")) { //$NON-NLS-1$
+					if (didSpecifyCompliance) {
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateCompliance", currentArg)); //$NON-NLS-1$
+					}
+					didSpecifyCompliance = true;
+					this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_4);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-1.5") || currentArg.equals("-5") || currentArg.equals("-5.0")) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+					if (didSpecifyCompliance) {
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateCompliance", currentArg)); //$NON-NLS-1$
+					}
+					didSpecifyCompliance = true;
+					this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_5);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-1.6") || currentArg.equals("-6") || currentArg.equals("-6.0")) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+					if (didSpecifyCompliance) {
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateCompliance", currentArg)); //$NON-NLS-1$
+					}
+					didSpecifyCompliance = true;
+					this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_6);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-1.7") || currentArg.equals("-7") || currentArg.equals("-7.0")) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+					if (didSpecifyCompliance) {
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateCompliance", currentArg)); //$NON-NLS-1$
+					}
+					didSpecifyCompliance = true;
+					this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_7);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-d")) { //$NON-NLS-1$
+					if (this.destinationPath != null) {
+						StringBuffer errorMessage = new StringBuffer();
+						errorMessage.append(currentArg);
+						if ((index + 1) < argCount) {
+							errorMessage.append(' ');
+							errorMessage.append(newCommandLineArgs[index + 1]);
+						}
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateOutputPath", errorMessage.toString())); //$NON-NLS-1$
+					}
+					mode = INSIDE_DESTINATION_PATH;
+					continue;
+				}
+				if (currentArg.equals("-classpath") //$NON-NLS-1$
+					|| currentArg.equals("-cp")) { //$NON-NLS-1$
+					mode = INSIDE_CLASSPATH_start;
+					continue;
+				}
+				if (currentArg.equals("-bootclasspath")) {//$NON-NLS-1$
+					if (bootclasspaths.size() > 0) {
+						StringBuffer errorMessage = new StringBuffer();
+						errorMessage.append(currentArg);
+						if ((index + 1) < argCount) {
+							errorMessage.append(' ');
+							errorMessage.append(newCommandLineArgs[index + 1]);
+						}
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateBootClasspath", errorMessage.toString())); //$NON-NLS-1$
+					}
+					mode = INSIDE_BOOTCLASSPATH_start;
+					continue;
+				}
+				if (currentArg.equals("-sourcepath")) {//$NON-NLS-1$
+					if (sourcepathClasspathArg != null) {
+						StringBuffer errorMessage = new StringBuffer();
+						errorMessage.append(currentArg);
+						if ((index + 1) < argCount) {
+							errorMessage.append(' ');
+							errorMessage.append(newCommandLineArgs[index + 1]);
+						}
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateSourcepath", errorMessage.toString())); //$NON-NLS-1$
+					}
+					mode = INSIDE_SOURCE_PATH_start;
+					continue;
+				}
+				if (currentArg.equals("-extdirs")) {//$NON-NLS-1$
+					if (extdirsClasspaths != null) {
+						StringBuffer errorMessage = new StringBuffer();
+						errorMessage.append(currentArg);
+						if ((index + 1) < argCount) {
+							errorMessage.append(' ');
+							errorMessage.append(newCommandLineArgs[index + 1]);
+						}
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateExtDirs", errorMessage.toString())); //$NON-NLS-1$
+					}
+					mode = INSIDE_EXT_DIRS;
+					continue;
+				}
+				if (currentArg.equals("-endorseddirs")) { //$NON-NLS-1$
+					if (endorsedDirClasspaths != null) {
+						StringBuffer errorMessage = new StringBuffer();
+						errorMessage.append(currentArg);
+						if ((index + 1) < argCount) {
+							errorMessage.append(' ');
+							errorMessage.append(newCommandLineArgs[index + 1]);
+						}
+						throw new IllegalArgumentException(
+							this.bind("configure.duplicateEndorsedDirs", errorMessage.toString())); //$NON-NLS-1$
+					}
+					mode = INSIDE_ENDORSED_DIRS;
+					continue;
+				}
+				if (currentArg.equals("-progress")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					this.showProgress = true;
+					continue;
+				}
+				if (currentArg.startsWith("-proceedOnError")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					int length = currentArg.length();
+					if (length > 15) {
+						if (currentArg.equals("-proceedOnError:Fatal")) { //$NON-NLS-1$
+							this.options.put(CompilerOptions.OPTION_FatalOptionalError, CompilerOptions.ENABLED);
+						} else {
+							throw new IllegalArgumentException(
+									this.bind("configure.invalidWarningConfiguration", currentArg)); //$NON-NLS-1$
+						}
+					} else {
+						this.options.put(CompilerOptions.OPTION_FatalOptionalError, CompilerOptions.DISABLED);
+					}
+					this.proceedOnError = true;
+					continue;
+				}
+				if (currentArg.equals("-time")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					this.timing = TIMING_ENABLED;
+					continue;
+				}
+				if (currentArg.equals("-time:detail")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					this.timing = TIMING_ENABLED|TIMING_DETAILED;
+					continue;
+				}
+				if (currentArg.equals("-version") //$NON-NLS-1$
+						|| currentArg.equals("-v")) { //$NON-NLS-1$
+					this.logger.logVersion(true);
+					this.proceed = false;
+					return;
+				}
+				if (currentArg.equals("-showversion")) { //$NON-NLS-1$
+					printVersionRequired = true;
+					mode = DEFAULT;
+					continue;
+				}
+				if ("-deprecation".equals(currentArg)) { //$NON-NLS-1$
+					didSpecifyDeprecation = true;
+					this.options.put(CompilerOptions.OPTION_ReportDeprecation, CompilerOptions.WARNING);
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-help") || currentArg.equals("-?")) { //$NON-NLS-1$ //$NON-NLS-2$
+					printUsageRequired = true;
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-help:warn") || //$NON-NLS-1$
+						currentArg.equals("-?:warn")) { //$NON-NLS-1$
+					printUsageRequired = true;
+					usageSection = "misc.usage.warn"; //$NON-NLS-1$
+					continue;
+				}
+				if (currentArg.equals("-noExit")) { //$NON-NLS-1$
+					this.systemExitWhenFinished = false;
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-verbose")) { //$NON-NLS-1$
+					this.verbose = true;
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-referenceInfo")) { //$NON-NLS-1$
+					this.produceRefInfo = true;
+					mode = DEFAULT;
+					continue;
+				}
+				if (currentArg.equals("-inlineJSR")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					this.options.put(
+							CompilerOptions.OPTION_InlineJsr,
+							CompilerOptions.ENABLED);
+					continue;
+				}
+				if (currentArg.startsWith("-g")) { //$NON-NLS-1$
+					mode = DEFAULT;
+					String debugOption = currentArg;
+					int length = currentArg.length();
+					if (length == 2) {
+						this.options.put(
+							CompilerOptions.OPTION_LocalVariableAttribute,
+							CompilerOptions.GENERATE);
+						this.options.put(
+							CompilerOptions.OPTION_LineNumberAttribute,
+							CompilerOptions.GENERATE);
+						this.options.put(
+							CompilerOptions.OPTION_SourceFileAttribute,
+							CompilerOptions.GENERATE);
+						continue;
+					}
+					if (length > 3) {
+						this.options.put(
+							CompilerOptions.OPTION_LocalVariableAttribute,
+							CompilerOptions.DO_NOT_GENERATE);
+						this.options.put(
+							CompilerOptions.OPTION_LineNumberAttribute,
+							CompilerOptions.DO_NOT_GENERATE);
+						this.options.put(
+							CompilerOptions.OPTION_SourceFileAttribute,
+							CompilerOptions.DO_NOT_GENERATE);
+						if (length == 7 && debugOption.equals("-g:" + NONE)) //$NON-NLS-1$
+							continue;
+						StringTokenizer tokenizer =
+							new StringTokenizer(debugOption.substring(3, debugOption.length()), ","); //$NON-NLS-1$
+						while (tokenizer.hasMoreTokens()) {
+							String token = tokenizer.nextToken();
+							if (token.equals("vars")) { //$NON-NLS-1$
+								this.options.put(
+									CompilerOptions.OPTION_LocalVariableAttribute,
+									CompilerOptions.GENERATE);
+							} else if (token.equals("lines")) { //$NON-NLS-1$
+								this.options.put(
+									CompilerOptions.OPTION_LineNumberAttribute,
+									CompilerOptions.GENERATE);
+							} else if (token.equals("source")) { //$NON-NLS-1$
+								this.options.put(
+									CompilerOptions.OPTION_SourceFileAttribute,
+									CompilerOptions.GENERATE);
 							} else {
 								throw new IllegalArgumentException(
 									this.bind("configure.invalidDebugOption", debugOption)); //$NON-NLS-1$
@@ -2296,12 +3942,12 @@ public void configure(String[] argv) {
 						tokenCounter++;
 						switch(token.charAt(0)) {
 							case '+' :
-								isEnabling = true;
-								token = token.substring(1);
+									isEnabling = true;
+									token = token.substring(1);
 								break;
 							case '-' :
-								isEnabling = false;
-								token = token.substring(1);
+									isEnabling = false;
+									token = token.substring(1);
 						}
 						handleWarningToken(token, isEnabling);
 					}
@@ -2345,12 +3991,12 @@ public void configure(String[] argv) {
 						tokenCounter++;
 						switch(token.charAt(0)) {
 							case '+' :
-								isEnabling = true;
-								token = token.substring(1);
+									isEnabling = true;
+									token = token.substring(1);
 								break;
 							case '-' :
-								isEnabling = false;
-								token = token.substring(1);
+									isEnabling = false;
+									token = token.substring(1);
 								break;
 						}
 						handleErrorToken(token, isEnabling);
@@ -2444,6 +4090,7 @@ public void configure(String[] argv) {
 					this.options.put(CompilerOptions.OPTION_ReportMissingNonNullByDefaultAnnotation, CompilerOptions.WARNING);
 					continue;
 				}
+<<<<<<< HEAD
 				break;
 			case INSIDE_TARGET :
 				if (this.didSpecifyTarget) {
@@ -2824,6 +4471,398 @@ public void configure(String[] argv) {
 		this.pendingErrors = null;
 	}
 }
+=======
+				break;
+			case INSIDE_TARGET :
+				if (this.didSpecifyTarget) {
+					throw new IllegalArgumentException(
+						this.bind("configure.duplicateTarget", currentArg));//$NON-NLS-1$
+				}
+				this.didSpecifyTarget = true;
+				if (currentArg.equals("1.1")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_1);
+				} else if (currentArg.equals("1.2")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_2);
+				} else if (currentArg.equals("1.3")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_3);
+				} else if (currentArg.equals("1.4")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+				} else if (currentArg.equals("1.5") || currentArg.equals("5") || currentArg.equals("5.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_5);
+				} else if (currentArg.equals("1.6") || currentArg.equals("6") || currentArg.equals("6.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_6);
+				} else if (currentArg.equals("1.7") || currentArg.equals("7") || currentArg.equals("7.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_7);
+				} else if (currentArg.equals("jsr14")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_JSR14);
+				} else if (currentArg.equals("cldc1.1")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_CLDC1_1);
+					this.options.put(CompilerOptions.OPTION_InlineJsr, CompilerOptions.ENABLED);
+				}else {
+					throw new IllegalArgumentException(this.bind("configure.targetJDK", currentArg)); //$NON-NLS-1$
+				}
+				mode = DEFAULT;
+				continue;
+			case INSIDE_LOG :
+				this.log = currentArg;
+				mode = DEFAULT;
+				continue;
+			case INSIDE_REPETITION :
+				try {
+					this.maxRepetition = Integer.parseInt(currentArg);
+					if (this.maxRepetition <= 0) {
+						throw new IllegalArgumentException(this.bind("configure.repetition", currentArg)); //$NON-NLS-1$
+					}
+				} catch (NumberFormatException e) {
+					throw new IllegalArgumentException(this.bind("configure.repetition", currentArg)); //$NON-NLS-1$
+				}
+				mode = DEFAULT;
+				continue;
+			case INSIDE_MAX_PROBLEMS :
+				try {
+					this.maxProblems = Integer.parseInt(currentArg);
+					if (this.maxProblems <= 0) {
+						throw new IllegalArgumentException(this.bind("configure.maxProblems", currentArg)); //$NON-NLS-1$
+					}
+					this.options.put(CompilerOptions.OPTION_MaxProblemPerUnit, currentArg);
+				} catch (NumberFormatException e) {
+					throw new IllegalArgumentException(this.bind("configure.maxProblems", currentArg)); //$NON-NLS-1$
+				}
+				mode = DEFAULT;
+				continue;
+			case INSIDE_SOURCE :
+				if (this.didSpecifySource) {
+					throw new IllegalArgumentException(
+						this.bind("configure.duplicateSource", currentArg));//$NON-NLS-1$
+				}
+				this.didSpecifySource = true;
+				if (currentArg.equals("1.3")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_3);
+				} else if (currentArg.equals("1.4")) { //$NON-NLS-1$
+					this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_4);
+				} else if (currentArg.equals("1.5") || currentArg.equals("5") || currentArg.equals("5.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_5);
+				} else if (currentArg.equals("1.6") || currentArg.equals("6") || currentArg.equals("6.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_6);
+				} else if (currentArg.equals("1.7") || currentArg.equals("7") || currentArg.equals("7.0")) { //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+					this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_7);
+				} else {
+					throw new IllegalArgumentException(this.bind("configure.source", currentArg)); //$NON-NLS-1$
+				}
+				mode = DEFAULT;
+				continue;
+			case INSIDE_DEFAULT_ENCODING :
+				if (specifiedEncodings != null) {
+					// check already defined encoding
+					if (!specifiedEncodings.contains(currentArg)) {
+						if (specifiedEncodings.size() > 1) {
+							this.logger.logWarning(
+									this.bind("configure.differentencodings", //$NON-NLS-1$
+									currentArg,
+									getAllEncodings(specifiedEncodings)));
+						} else {
+							this.logger.logWarning(
+									this.bind("configure.differentencoding", //$NON-NLS-1$
+									currentArg,
+									getAllEncodings(specifiedEncodings)));
+						}
+					}
+				} else {
+					specifiedEncodings = new HashSet();
+				}
+				try { // ensure encoding is supported
+					new InputStreamReader(new ByteArrayInputStream(new byte[0]), currentArg);
+				} catch (UnsupportedEncodingException e) {
+					throw new IllegalArgumentException(
+						this.bind("configure.unsupportedEncoding", currentArg)); //$NON-NLS-1$
+				}
+				specifiedEncodings.add(currentArg);
+				this.options.put(CompilerOptions.OPTION_Encoding, currentArg);
+				mode = DEFAULT;
+				continue;
+			case INSIDE_DESTINATION_PATH :
+				setDestinationPath(currentArg.equals(NONE) ? NONE : currentArg);
+				mode = DEFAULT;
+				continue;
+			case INSIDE_CLASSPATH_start:
+				mode = DEFAULT;
+				index += processPaths(newCommandLineArgs, index, currentArg, classpaths);
+				continue;
+			case INSIDE_BOOTCLASSPATH_start:
+				mode = DEFAULT;
+				index += processPaths(newCommandLineArgs, index, currentArg, bootclasspaths);
+				continue;
+			case INSIDE_SOURCE_PATH_start:
+				mode = DEFAULT;
+				String[] sourcePaths = new String[1];
+				index += processPaths(newCommandLineArgs, index, currentArg, sourcePaths);
+				sourcepathClasspathArg = sourcePaths[0];
+				continue;
+			case INSIDE_EXT_DIRS:
+				if (currentArg.indexOf("[-d") != -1) { //$NON-NLS-1$
+					throw new IllegalArgumentException(
+						this.bind("configure.unexpectedDestinationPathEntry", //$NON-NLS-1$
+							"-extdir")); //$NON-NLS-1$
+				}
+				StringTokenizer tokenizer = new StringTokenizer(currentArg,	File.pathSeparator, false);
+				extdirsClasspaths = new ArrayList(DEFAULT_SIZE_CLASSPATH);
+				while (tokenizer.hasMoreTokens())
+					extdirsClasspaths.add(tokenizer.nextToken());
+				mode = DEFAULT;
+				continue;
+			case INSIDE_ENDORSED_DIRS:
+				if (currentArg.indexOf("[-d") != -1) { //$NON-NLS-1$
+					throw new IllegalArgumentException(
+						this.bind("configure.unexpectedDestinationPathEntry", //$NON-NLS-1$
+							"-endorseddirs")); //$NON-NLS-1$
+				}				tokenizer = new StringTokenizer(currentArg,	File.pathSeparator, false);
+				endorsedDirClasspaths = new ArrayList(DEFAULT_SIZE_CLASSPATH);
+				while (tokenizer.hasMoreTokens())
+					endorsedDirClasspaths.add(tokenizer.nextToken());
+				mode = DEFAULT;
+				continue;
+			case INSIDE_SOURCE_DIRECTORY_DESTINATION_PATH:
+				if (currentArg.endsWith("]")) { //$NON-NLS-1$
+					customDestinationPath = currentArg.substring(0,
+						currentArg.length() - 1);
+				} else {
+					throw new IllegalArgumentException(
+						this.bind("configure.incorrectDestinationPathEntry", //$NON-NLS-1$
+							"[-d " + currentArg)); //$NON-NLS-1$
+				}
+				break;
+			case INSIDE_PROCESSOR_PATH_start :
+				// nothing to do here. This is consumed again by the AnnotationProcessorManager
+				mode = DEFAULT;
+				continue;
+			case INSIDE_PROCESSOR_start :
+				// nothing to do here. This is consumed again by the AnnotationProcessorManager
+				mode = DEFAULT;
+				continue;
+			case INSIDE_S_start :
+				// nothing to do here. This is consumed again by the AnnotationProcessorManager
+				mode = DEFAULT;
+				continue;
+			case INSIDE_CLASS_NAMES :
+				tokenizer = new StringTokenizer(currentArg, ","); //$NON-NLS-1$
+				if (this.classNames == null) {
+					this.classNames = new String[DEFAULT_SIZE_CLASSPATH];
+				}
+				while (tokenizer.hasMoreTokens()) {
+					if (this.classNames.length == classCount) {
+						// resize
+						System.arraycopy(
+							this.classNames,
+							0,
+							(this.classNames = new String[classCount * 2]),
+							0,
+							classCount);
+					}
+					this.classNames[classCount++] = tokenizer.nextToken();
+				}
+				mode = DEFAULT;
+				continue;
+			case INSIDE_WARNINGS_PROPERTIES :
+				initializeWarnings(currentArg);
+				mode = DEFAULT;
+				continue;
+		}
+
+		// default is input directory, if no custom destination path exists
+		if (customDestinationPath == null) {
+			if (File.separatorChar != '/') {
+				currentArg = currentArg.replace('/', File.separatorChar);
+			}
+			if (currentArg.endsWith("[-d")) { //$NON-NLS-1$
+				currentSourceDirectory = currentArg.substring(0,
+					currentArg.length() - 3);
+				mode = INSIDE_SOURCE_DIRECTORY_DESTINATION_PATH;
+				continue;
+			}
+			currentSourceDirectory = currentArg;
+		}
+		File dir = new File(currentSourceDirectory);
+		if (!dir.isDirectory()) {
+			throw new IllegalArgumentException(
+				this.bind("configure.unrecognizedOption", currentSourceDirectory)); //$NON-NLS-1$
+		}
+		String[] result = FileFinder.find(dir, SuffixConstants.SUFFIX_STRING_JAVA);
+		if (NONE.equals(customDestinationPath)) {
+			customDestinationPath = NONE; // ensure == comparison
+		}
+		if (this.filenames != null) {
+			// some source files were specified explicitly
+			int length = result.length;
+			System.arraycopy(
+				this.filenames,
+				0,
+				(this.filenames = new String[length + filesCount]),
+				0,
+				filesCount);
+			System.arraycopy(
+				this.encodings,
+				0,
+				(this.encodings = new String[length + filesCount]),
+				0,
+				filesCount);
+			System.arraycopy(
+				this.destinationPaths,
+				0,
+				(this.destinationPaths = new String[length + filesCount]),
+				0,
+				filesCount);
+			System.arraycopy(result, 0, this.filenames, filesCount, length);
+			for (int i = 0; i < length; i++) {
+				this.encodings[filesCount + i] = customEncoding;
+				this.destinationPaths[filesCount + i] = customDestinationPath;
+			}
+			filesCount += length;
+			customEncoding = null;
+			customDestinationPath = null;
+			currentSourceDirectory = null;
+		} else {
+			this.filenames = result;
+			filesCount = this.filenames.length;
+			this.encodings = new String[filesCount];
+			this.destinationPaths = new String[filesCount];
+			for (int i = 0; i < filesCount; i++) {
+				this.encodings[i] = customEncoding;
+				this.destinationPaths[i] = customDestinationPath;
+			}
+			customEncoding = null;
+			customDestinationPath = null;
+			currentSourceDirectory = null;
+		}
+		mode = DEFAULT;
+		continue;
+	}
+
+	// set DocCommentSupport, with appropriate side effects on defaults if
+	// javadoc is not enabled
+	if (this.enableJavadocOn) {
+		this.options.put(
+			CompilerOptions.OPTION_DocCommentSupport,
+			CompilerOptions.ENABLED);
+	} else if (this.warnJavadocOn || this.warnAllJavadocOn) {
+		this.options.put(
+			CompilerOptions.OPTION_DocCommentSupport,
+			CompilerOptions.ENABLED);
+		// override defaults: references that are embedded in javadoc are ignored
+		// from the perspective of parameters and thrown exceptions usage
+		this.options.put(
+			CompilerOptions.OPTION_ReportUnusedParameterIncludeDocCommentReference,
+			CompilerOptions.DISABLED);
+		this.options.put(
+			CompilerOptions.OPTION_ReportUnusedDeclaredThrownExceptionIncludeDocCommentReference,
+			CompilerOptions.DISABLED);
+	}
+	// configure warnings for javadoc contents
+	if (this.warnJavadocOn) {
+		this.options.put(
+			CompilerOptions.OPTION_ReportInvalidJavadocTags,
+			CompilerOptions.ENABLED);
+		this.options.put(
+			CompilerOptions.OPTION_ReportInvalidJavadocTagsDeprecatedRef,
+			CompilerOptions.ENABLED);
+		this.options.put(
+			CompilerOptions.OPTION_ReportInvalidJavadocTagsNotVisibleRef,
+			CompilerOptions.ENABLED);
+		this.options.put(
+			CompilerOptions.OPTION_ReportMissingJavadocTagsVisibility,
+			CompilerOptions.PRIVATE);
+	}
+
+	// GROOVY start
+	// grails 1.1 batch builds need the extra phase
+	//optionMap.put(CompilerOptions.OPTIONG_GroovyFlags,"1");
+	if (encounteredGroovySourceFile) {
+		this.options.put(
+				CompilerOptions.OPTIONG_BuildGroovyFiles,
+				CompilerOptions.ENABLED);
+	} else {
+		this.options.put(
+				CompilerOptions.OPTIONG_BuildGroovyFiles,
+				CompilerOptions.DISABLED);		
+	}
+	// GROOVY end
+
+
+	if (printUsageRequired || (filesCount == 0 && classCount == 0)) {
+		if (usageSection ==  null) {
+			printUsage(); // default
+		} else {
+			printUsage(usageSection);
+		}
+		this.proceed = false;
+		return;
+	}
+
+	if (this.log != null) {
+		this.logger.setLog(this.log);
+	} else {
+		this.showProgress = false;
+	}
+	this.logger.logVersion(printVersionRequired);
+
+	validateOptions(didSpecifyCompliance);
+
+	// Enable annotation processing by default in batch mode when compliance is at least 1.6
+	// see bug https://bugs.eclipse.org/bugs/show_bug.cgi?id=185768
+	if (!didSpecifyDisabledAnnotationProcessing
+			&& CompilerOptions.versionToJdkLevel(this.options.get(CompilerOptions.OPTION_Compliance)) >= ClassFileConstants.JDK1_6) {
+		this.options.put(CompilerOptions.OPTION_Process_Annotations, CompilerOptions.ENABLED);
+	}
+
+	this.logger.logCommandLineArguments(newCommandLineArgs);
+	this.logger.logOptions(this.options);
+
+	if (this.maxRepetition == 0) {
+		this.maxRepetition = 1;
+	}
+	if (this.maxRepetition >= 3 && (this.timing & TIMING_ENABLED) != 0) {
+		this.compilerStats = new CompilerStats[this.maxRepetition];
+	}
+
+	if (filesCount != 0) {
+		System.arraycopy(
+			this.filenames,
+			0,
+			(this.filenames = new String[filesCount]),
+			0,
+			filesCount);
+	}
+
+	if (classCount != 0) {
+		System.arraycopy(
+			this.classNames,
+			0,
+			(this.classNames = new String[classCount]),
+			0,
+			classCount);
+	}
+
+	setPaths(bootclasspaths,
+			sourcepathClasspathArg,
+			sourcepathClasspaths,
+			classpaths,
+			extdirsClasspaths,
+			endorsedDirClasspaths,
+			customEncoding);
+
+	if (specifiedEncodings != null && specifiedEncodings.size() > 1) {
+		this.logger.logWarning(this.bind("configure.multipleencodings", //$NON-NLS-1$
+				(String) this.options.get(CompilerOptions.OPTION_Encoding),
+				getAllEncodings(specifiedEncodings)));
+	}
+	if (this.pendingErrors != null) {
+		for (Iterator iterator = this.pendingErrors.iterator(); iterator.hasNext(); ) {
+			String message = (String) iterator.next();
+			this.logger.logPendingError(message);
+		}
+		this.pendingErrors = null;
+	}
+}
+>>>>>>> patch
 
 private static char[][] decodeIgnoreOptionalProblemsFromFolders(String folders) {
 	StringTokenizer tokenizer = new StringTokenizer(folders, File.pathSeparator);
@@ -2897,7 +4936,7 @@ private void initializeWarnings(String propertiesFile) {
 	// when using a properties file mimic relevant defaults from JavaCorePreferenceInitializer:
 	if (!properties.containsKey(CompilerOptions.OPTION_LocalVariableAttribute)) {
 		this.options.put(CompilerOptions.OPTION_LocalVariableAttribute, CompilerOptions.GENERATE);
-	}
+}
 	if (!properties.containsKey(CompilerOptions.OPTION_PreserveUnusedLocal)) {
 		this.options.put(CompilerOptions.OPTION_PreserveUnusedLocal, CompilerOptions.PRESERVE);
 	}
@@ -3026,6 +5065,7 @@ public CompilationUnit[] getCompilationUnits() {
 		units[i] = new CompilationUnit(null, fileName, encoding, this.destinationPaths[i],
 				shouldIgnoreOptionalProblems(this.ignoreOptionalProblemsFromFolders, fileName.toCharArray()));
 	}
+<<<<<<< HEAD
 	return units;
 }
 
@@ -3074,6 +5114,53 @@ public IProblemFactory getProblemFactory() {
  * External API
  */
 protected ArrayList handleBootclasspath(ArrayList bootclasspaths, String customEncoding) {
+=======
+	return units;
+}
+
+/*
+ *  Low-level API performing the actual compilation
+ */
+public IErrorHandlingPolicy getHandlingPolicy() {
+
+	// passes the initial set of files to the batch oracle (to avoid finding more than once the same units when case insensitive match)
+	return new IErrorHandlingPolicy() {
+		public boolean proceedOnErrors() {
+			return Main.this.proceedOnError; // stop if there are some errors
+		}
+		public boolean stopOnFirstError() {
+			return false;
+		}
+	};
+}
+
+/*
+ * External API
+ */
+public File getJavaHome() {
+	if (!this.javaHomeChecked) {
+		this.javaHomeChecked = true;
+		this.javaHomeCache = Util.getJavaHome();
+	}
+	return this.javaHomeCache;
+}
+
+public FileSystem getLibraryAccess() {
+	return new FileSystem(this.checkedClasspaths, this.filenames);
+}
+
+/*
+ *  Low-level API performing the actual compilation
+ */
+public IProblemFactory getProblemFactory() {
+	return new DefaultProblemFactory(this.compilerLocale);
+}
+
+/*
+ * External API
+ */
+protected ArrayList handleBootclasspath(ArrayList bootclasspaths, String customEncoding) {
+>>>>>>> patch
  	final int bootclasspathsSize;
 	if ((bootclasspaths != null)
 		&& ((bootclasspathsSize = bootclasspaths.size()) != 0))
@@ -3517,7 +5604,7 @@ private void handleErrorOrWarningToken(String token, boolean isEnabling, int sev
 					this.options.put(
 						CompilerOptions.OPTION_ReportInvalidJavadocTagsVisibility,
 						CompilerOptions.PRIVATE);
-				}
+			}
 				return;
 			} else if (token.equals("invalidJavadocTag")) { //$NON-NLS-1$
 				this.options.put(
@@ -3540,18 +5627,18 @@ private void handleErrorOrWarningToken(String token, boolean isEnabling, int sev
 				String visibility = null;
 				if (isEnabling && start >= 0 && end >= 0 && start < end){
 					visibility = token.substring(start+1, end).trim();
-				}
+			}
 				if (visibility != null && visibility.equals(CompilerOptions.PUBLIC)
 						|| visibility.equals(CompilerOptions.PRIVATE)
 						|| visibility.equals(CompilerOptions.PROTECTED)
 						|| visibility.equals(CompilerOptions.DEFAULT)) {
-					this.options.put(
+				this.options.put(
 							CompilerOptions.OPTION_ReportInvalidJavadocTagsVisibility,
 							visibility);
-					return;
+				return;
 				} else {
 					throw new IllegalArgumentException(this.bind("configure.invalidJavadocTagVisibility", token)); //$NON-NLS-1$
-				}
+			}
 			}
 			break;
 		case 'j' :
@@ -3917,7 +6004,7 @@ private void handleErrorOrWarningToken(String token, boolean isEnabling, int sev
 						CompilerOptions.OPTION_ReportUnusedParameterWhenImplementingAbstract,
 						isEnabling ? CompilerOptions.ENABLED : CompilerOptions.DISABLED);
 				return;
-			}  else if (token.equals("unusedTypeArgs")) { //$NON-NLS-1$
+			} else if (token.equals("unusedTypeArgs")) { //$NON-NLS-1$
 				setSeverity(CompilerOptions.OPTION_ReportUnusedTypeArgumentsForMethodInvocation, severity, isEnabling);
 				setSeverity(CompilerOptions.OPTION_ReportRedundantSpecificationOfTypeArguments, severity, isEnabling);
 				return;
@@ -4146,6 +6233,7 @@ public void performCompilation() {
 protected void loggingExtraProblems() {
 	this.logger.loggingExtraProblems(this);
 }
+<<<<<<< HEAD
 public void printUsage() {
 	printUsage("misc.usage"); //$NON-NLS-1$
 }
@@ -4569,6 +6657,431 @@ protected void setPaths(ArrayList bootclasspaths,
 	classpaths.toArray(this.checkedClasspaths);
 	this.logger.logClasspath(this.checkedClasspaths);
 }
+=======
+public void printUsage() {
+	printUsage("misc.usage"); //$NON-NLS-1$
+}
+private void printUsage(String sectionID) {
+	this.logger.logUsage(
+		this.bind(
+			sectionID,
+			new String[] {
+				System.getProperty("path.separator"), //$NON-NLS-1$
+				this.bind("compiler.name"), //$NON-NLS-1$
+				this.bind("compiler.version"), //$NON-NLS-1$
+				this.bind("compiler.copyright") //$NON-NLS-1$
+			}));
+	this.logger.flush();
+}
+private ReferenceBinding[] processClassNames(LookupEnvironment environment) {
+	// check for .class file presence in case of apt processing
+	int length = this.classNames.length;
+	ReferenceBinding[] referenceBindings = new ReferenceBinding[length];
+	for (int i = 0; i < length; i++) {
+		String currentName = this.classNames[i];
+		char[][] compoundName = null;
+		if (currentName.indexOf('.') != -1) {
+			// consider names with '.' as fully qualified names
+			char[] typeName = currentName.toCharArray();
+			compoundName = CharOperation.splitOn('.', typeName);
+		} else {
+			compoundName = new char[][] { currentName.toCharArray() };
+		}
+		ReferenceBinding type = environment.getType(compoundName);
+		if (type != null && type.isValidBinding()) {
+			if (type.isBinaryBinding()) {
+				referenceBindings[i] = type;
+			}
+		} else {
+			throw new IllegalArgumentException(
+					this.bind("configure.invalidClassName", currentName));//$NON-NLS-1$
+		}
+	}
+	return referenceBindings;
+}
+/*
+ * External API
+ */
+public void processPathEntries(final int defaultSize, final ArrayList paths,
+			final String currentPath, String customEncoding, boolean isSourceOnly,
+			boolean rejectDestinationPathOnJars) {
+	String currentClasspathName = null;
+	String currentDestinationPath = null;
+	ArrayList currentRuleSpecs = new ArrayList(defaultSize);
+	StringTokenizer tokenizer = new StringTokenizer(currentPath,
+			File.pathSeparator + "[]", true); //$NON-NLS-1$
+	ArrayList tokens = new ArrayList();
+	while (tokenizer.hasMoreTokens()) {
+		tokens.add(tokenizer.nextToken());
+	}
+	// state machine
+	final int start = 0;
+	final int readyToClose = 1;
+	// 'path' 'path1[rule];path2'
+	final int readyToCloseEndingWithRules = 2;
+	// 'path[rule]' 'path1;path2[rule]'
+	final int readyToCloseOrOtherEntry = 3;
+	// 'path[rule];' 'path;' 'path1;path2;'
+	final int rulesNeedAnotherRule = 4;
+	// 'path[rule1;'
+	final int rulesStart = 5;
+	// 'path[' 'path1;path2['
+	final int rulesReadyToClose = 6;
+	// 'path[rule' 'path[rule1;rule2'
+	final int destinationPathReadyToClose = 7;
+	// 'path[-d bin'
+	final int readyToCloseEndingWithDestinationPath = 8;
+	// 'path[-d bin]' 'path[rule][-d bin]'
+	final int destinationPathStart = 9;
+	// 'path[rule]['
+	final int bracketOpened = 10;
+	// '.*[.*'
+	final int bracketClosed = 11;
+	// '.*([.*])+'
+
+	final int error = 99;
+	int state = start;
+	String token = null;
+	int cursor = 0, tokensNb = tokens.size(), bracket = -1;
+	while (cursor < tokensNb && state != error) {
+		token = (String) tokens.get(cursor++);
+		if (token.equals(File.pathSeparator)) {
+			switch (state) {
+			case start:
+			case readyToCloseOrOtherEntry:
+			case bracketOpened:
+				break;
+			case readyToClose:
+			case readyToCloseEndingWithRules:
+			case readyToCloseEndingWithDestinationPath:
+				state = readyToCloseOrOtherEntry;
+				addNewEntry(paths, currentClasspathName, currentRuleSpecs,
+						customEncoding, currentDestinationPath, isSourceOnly,
+						rejectDestinationPathOnJars);
+				currentRuleSpecs.clear();
+				break;
+			case rulesReadyToClose:
+				state = rulesNeedAnotherRule;
+				break;
+			case destinationPathReadyToClose:
+				throw new IllegalArgumentException(
+					this.bind("configure.incorrectDestinationPathEntry", //$NON-NLS-1$
+						currentPath));
+			case bracketClosed:
+				cursor = bracket + 1;
+				state = rulesStart;
+				break;
+			default:
+				state = error;
+			}
+		} else if (token.equals("[")) { //$NON-NLS-1$
+			switch (state) {
+			case start:
+				currentClasspathName = ""; //$NON-NLS-1$
+				//$FALL-THROUGH$
+				case readyToClose:
+				bracket = cursor - 1;
+				//$FALL-THROUGH$
+				case bracketClosed:
+				state = bracketOpened;
+				break;
+			case readyToCloseEndingWithRules:
+				state = destinationPathStart;
+				break;
+			case readyToCloseEndingWithDestinationPath:
+				state = rulesStart;
+				break;
+			case bracketOpened:
+			default:
+				state = error;
+			}
+		} else if (token.equals("]")) { //$NON-NLS-1$
+			switch (state) {
+			case rulesReadyToClose:
+				state = readyToCloseEndingWithRules;
+				break;
+			case destinationPathReadyToClose:
+				state = readyToCloseEndingWithDestinationPath;
+				break;
+			case bracketOpened:
+				state = bracketClosed;
+				break;
+			case bracketClosed:
+			default:
+				state = error;
+			}
+		} else {
+			// regular word
+			switch (state) {
+			case start:
+			case readyToCloseOrOtherEntry:
+				state = readyToClose;
+				currentClasspathName = token;
+				break;
+			case rulesStart:
+				if (token.startsWith("-d ")) { //$NON-NLS-1$
+					if (currentDestinationPath != null) {
+						throw new IllegalArgumentException(
+								this.bind("configure.duplicateDestinationPathEntry", //$NON-NLS-1$
+										currentPath));
+					}
+					currentDestinationPath = token.substring(3).trim();
+					state = destinationPathReadyToClose;
+					break;
+				} // else we proceed with a rule
+				//$FALL-THROUGH$
+			case rulesNeedAnotherRule:
+				if (currentDestinationPath != null) {
+					throw new IllegalArgumentException(
+							this.bind("configure.accessRuleAfterDestinationPath", //$NON-NLS-1$
+								currentPath));
+				}
+				state = rulesReadyToClose;
+				currentRuleSpecs.add(token);
+				break;
+			case destinationPathStart:
+				if (!token.startsWith("-d ")) { //$NON-NLS-1$
+					state = error;
+				} else {
+					currentDestinationPath = token.substring(3).trim();
+					state = destinationPathReadyToClose;
+				}
+				break;
+			case bracketClosed:
+				for (int i = bracket; i < cursor ; i++) {
+					currentClasspathName += (String) tokens.get(i);
+				}
+				state = readyToClose;
+				break;
+			case bracketOpened:
+				break;
+			default:
+				state = error;
+			}
+		}
+		if (state == bracketClosed && cursor == tokensNb) {
+			cursor = bracket + 1;
+			state = rulesStart;
+		}
+	}
+	switch(state) {
+		case readyToCloseOrOtherEntry:
+			break;
+		case readyToClose:
+		case readyToCloseEndingWithRules:
+		case readyToCloseEndingWithDestinationPath:
+			addNewEntry(paths, currentClasspathName, currentRuleSpecs,
+				customEncoding, currentDestinationPath, isSourceOnly,
+				rejectDestinationPathOnJars);
+			break;
+		case bracketOpened:
+		case bracketClosed:
+		default :
+			// we go on anyway
+			if (currentPath.length() != 0) {
+				addPendingErrors(this.bind("configure.incorrectClasspath", currentPath));//$NON-NLS-1$
+			}
+	}
+}
+
+private int processPaths(String[] args, int index, String currentArg, ArrayList paths) {
+	int localIndex = index;
+	int count = 0;
+	for (int i = 0, max = currentArg.length(); i < max; i++) {
+		switch(currentArg.charAt(i)) {
+			case '[' :
+				count++;
+				break;
+			case ']' :
+				count--;
+				break;
+		}
+	}
+	if (count == 0) {
+		paths.add(currentArg);
+	} else if (count > 1) {
+		throw new IllegalArgumentException(
+				this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+							currentArg));
+	} else {
+		StringBuffer currentPath = new StringBuffer(currentArg);
+		while (true) {
+			if (localIndex >= args.length) {
+				throw new IllegalArgumentException(
+						this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+								currentArg));
+			}
+			localIndex++;
+			String nextArg = args[localIndex];
+			for (int i = 0, max = nextArg.length(); i < max; i++) {
+				switch(nextArg.charAt(i)) {
+					case '[' :
+						if (count > 1) {
+							throw new IllegalArgumentException(
+									this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+											nextArg));
+						}
+						count++;
+						break;
+					case ']' :
+						count--;
+						break;
+				}
+			}
+			if (count == 0) {
+				currentPath.append(' ');
+				currentPath.append(nextArg);
+				paths.add(currentPath.toString());
+				return localIndex - index;
+			} else if (count < 0) {
+				throw new IllegalArgumentException(
+						this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+									nextArg));
+			} else {
+				currentPath.append(' ');
+				currentPath.append(nextArg);
+			}
+		}
+
+	}
+	return localIndex - index;
+}
+private int processPaths(String[] args, int index, String currentArg, String[] paths) {
+	int localIndex = index;
+	int count = 0;
+	for (int i = 0, max = currentArg.length(); i < max; i++) {
+		switch(currentArg.charAt(i)) {
+			case '[' :
+				count++;
+				break;
+			case ']' :
+				count--;
+				break;
+		}
+	}
+	if (count == 0) {
+		paths[0] = currentArg;
+	} else {
+		StringBuffer currentPath = new StringBuffer(currentArg);
+		while (true) {
+			localIndex++;
+			if (localIndex >= args.length) {
+				throw new IllegalArgumentException(
+						this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+								currentArg));
+			}
+			String nextArg = args[localIndex];
+			for (int i = 0, max = nextArg.length(); i < max; i++) {
+				switch(nextArg.charAt(i)) {
+					case '[' :
+						if (count > 1) {
+							throw new IllegalArgumentException(
+									this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+											currentArg));
+						}
+						count++;
+						break;
+					case ']' :
+						count--;
+						break;
+				}
+			}
+			if (count == 0) {
+				currentPath.append(' ');
+				currentPath.append(nextArg);
+				paths[0] = currentPath.toString();
+				return localIndex - index;
+			} else if (count < 0) {
+				throw new IllegalArgumentException(
+						this.bind("configure.unexpectedBracket", //$NON-NLS-1$
+									currentArg));
+			} else {
+				currentPath.append(' ');
+				currentPath.append(nextArg);
+			}
+		}
+
+	}
+	return localIndex - index;
+}
+/**
+ * Creates a NLS catalog for the given locale.
+ */
+public void relocalize() {
+	relocalize(Locale.getDefault());
+}
+
+private void relocalize(Locale locale) {
+	this.compilerLocale = locale;
+	try {
+		this.bundle = ResourceBundleFactory.getBundle(locale);
+	} catch(MissingResourceException e) {
+		System.out.println("Missing resource : " + Main.bundleName.replace('.', '/') + ".properties for locale " + locale); //$NON-NLS-1$//$NON-NLS-2$
+		throw e;
+	}
+}
+/*
+ * External API
+ */
+public void setDestinationPath(String dest) {
+	this.destinationPath = dest;
+}
+/*
+ * External API
+ */
+public void setLocale(Locale locale) {
+	relocalize(locale);
+}
+/*
+ * External API
+ */
+protected void setPaths(ArrayList bootclasspaths,
+		String sourcepathClasspathArg,
+		ArrayList sourcepathClasspaths,
+		ArrayList classpaths,
+		ArrayList extdirsClasspaths,
+		ArrayList endorsedDirClasspaths,
+		String customEncoding) {
+
+	// process bootclasspath, classpath and sourcepaths
+ 	bootclasspaths = handleBootclasspath(bootclasspaths, customEncoding);
+
+	classpaths = handleClasspath(classpaths, customEncoding);
+
+	if (sourcepathClasspathArg != null) {
+		processPathEntries(DEFAULT_SIZE_CLASSPATH, sourcepathClasspaths,
+			sourcepathClasspathArg, customEncoding, true, false);
+	}
+
+	/*
+	 * Feed endorsedDirClasspath according to:
+	 * - -extdirs first if present;
+	 * - else java.ext.dirs if defined;
+	 * - else default extensions directory for the platform.
+	 */
+	extdirsClasspaths = handleExtdirs(extdirsClasspaths);
+
+	endorsedDirClasspaths = handleEndorseddirs(endorsedDirClasspaths);
+
+	/*
+	 * Concatenate classpath entries
+	 * We put the bootclasspath at the beginning of the classpath
+	 * entries, followed by the extension libraries, followed by
+	 * the sourcepath followed by the classpath.  All classpath
+	 * entries are searched for both sources and binaries except
+	 * the sourcepath entries which are searched for sources only.
+	 */
+	bootclasspaths.addAll(endorsedDirClasspaths);
+	bootclasspaths.addAll(extdirsClasspaths);
+	bootclasspaths.addAll(sourcepathClasspaths);
+	bootclasspaths.addAll(classpaths);
+	classpaths = bootclasspaths;
+	classpaths = FileSystem.ClasspathNormalizer.normalize(classpaths);
+	this.checkedClasspaths = new FileSystem.Classpath[classpaths.size()];
+	classpaths.toArray(this.checkedClasspaths);
+	this.logger.logClasspath(this.checkedClasspaths);
+}
+>>>>>>> patch
 private static boolean shouldIgnoreOptionalProblems(char[][] folderNames, char[] fileName) {
 	if (folderNames == null || fileName == null) {
 		return false;
@@ -4581,6 +7094,7 @@ private static boolean shouldIgnoreOptionalProblems(char[][] folderNames, char[]
 	}
 	return false;
 }
+<<<<<<< HEAD
 protected void validateOptions(boolean didSpecifyCompliance) {
 	if (didSpecifyCompliance) {
 		Object version = this.options.get(CompilerOptions.OPTION_Compliance);
@@ -4756,3 +7270,150 @@ protected void validateOptions(boolean didSpecifyCompliance) {
 	}
 }
 }
+=======
+protected void validateOptions(boolean didSpecifyCompliance) {
+	if (didSpecifyCompliance) {
+		Object version = this.options.get(CompilerOptions.OPTION_Compliance);
+		if (CompilerOptions.VERSION_1_3.equals(version)) {
+			if (!this.didSpecifySource) this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_3);
+			if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_1);
+		} else if (CompilerOptions.VERSION_1_4.equals(version)) {
+			if (this.didSpecifySource) {
+				Object source = this.options.get(CompilerOptions.OPTION_Source);
+				if (CompilerOptions.VERSION_1_3.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_2);
+				} else if (CompilerOptions.VERSION_1_4.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+				}
+			} else {
+				this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_3);
+				if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_2);
+			}
+		} else if (CompilerOptions.VERSION_1_5.equals(version)) {
+			if (this.didSpecifySource) {
+				Object source = this.options.get(CompilerOptions.OPTION_Source);
+				if (CompilerOptions.VERSION_1_3.equals(source)
+						|| CompilerOptions.VERSION_1_4.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+				} else if (CompilerOptions.VERSION_1_5.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_5);
+				}
+			} else {
+				this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_5);
+				if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_5);
+			}
+		} else if (CompilerOptions.VERSION_1_6.equals(version)) {
+			if (this.didSpecifySource) {
+				Object source = this.options.get(CompilerOptions.OPTION_Source);
+				if (CompilerOptions.VERSION_1_3.equals(source)
+						|| CompilerOptions.VERSION_1_4.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+				} else if (CompilerOptions.VERSION_1_5.equals(source)
+						|| CompilerOptions.VERSION_1_6.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_6);
+				}
+			} else {
+				this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_6);
+				if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_6);
+			}
+		} else if (CompilerOptions.VERSION_1_7.equals(version)) {
+			if (this.didSpecifySource) {
+				Object source = this.options.get(CompilerOptions.OPTION_Source);
+				if (CompilerOptions.VERSION_1_3.equals(source)
+						|| CompilerOptions.VERSION_1_4.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+				} else if (CompilerOptions.VERSION_1_5.equals(source)
+						|| CompilerOptions.VERSION_1_6.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_6);
+				} else if (CompilerOptions.VERSION_1_7.equals(source)) {
+					if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_7);
+				}
+			} else {
+				this.options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_7);
+				if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_7);
+			}
+		}
+	} else if (this.didSpecifySource) {
+		Object version = this.options.get(CompilerOptions.OPTION_Source);
+		// default is source 1.3 target 1.2 and compliance 1.4
+		if (CompilerOptions.VERSION_1_4.equals(version)) {
+			if (!didSpecifyCompliance) this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_4);
+			if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+		} else if (CompilerOptions.VERSION_1_5.equals(version)) {
+			if (!didSpecifyCompliance) this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_5);
+			if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_5);
+		} else if (CompilerOptions.VERSION_1_6.equals(version)) {
+			if (!didSpecifyCompliance) this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_6);
+			if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_6);
+		} else if (CompilerOptions.VERSION_1_7.equals(version)) {
+			if (!didSpecifyCompliance) this.options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_7);
+			if (!this.didSpecifyTarget) this.options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_7);
+		}
+	}
+
+	final Object sourceVersion = this.options.get(CompilerOptions.OPTION_Source);
+	final Object compliance = this.options.get(CompilerOptions.OPTION_Compliance);
+	if (sourceVersion.equals(CompilerOptions.VERSION_1_7)
+			&& CompilerOptions.versionToJdkLevel(compliance) < ClassFileConstants.JDK1_7) {
+		// compliance must be 1.7 if source is 1.7
+		throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForSource", (String)this.options.get(CompilerOptions.OPTION_Compliance), CompilerOptions.VERSION_1_7)); //$NON-NLS-1$
+	} else if (sourceVersion.equals(CompilerOptions.VERSION_1_6)
+			&& CompilerOptions.versionToJdkLevel(compliance) < ClassFileConstants.JDK1_6) {
+		// compliance must be 1.6 if source is 1.6
+		throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForSource", (String)this.options.get(CompilerOptions.OPTION_Compliance), CompilerOptions.VERSION_1_6)); //$NON-NLS-1$
+	} else if (sourceVersion.equals(CompilerOptions.VERSION_1_5)
+			&& CompilerOptions.versionToJdkLevel(compliance) < ClassFileConstants.JDK1_5) {
+		// compliance must be 1.5 if source is 1.5
+		throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForSource", (String)this.options.get(CompilerOptions.OPTION_Compliance), CompilerOptions.VERSION_1_5)); //$NON-NLS-1$
+	} else if (sourceVersion.equals(CompilerOptions.VERSION_1_4)
+			&& CompilerOptions.versionToJdkLevel(compliance) < ClassFileConstants.JDK1_4) {
+		// compliance must be 1.4 if source is 1.4
+		throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForSource", (String)this.options.get(CompilerOptions.OPTION_Compliance), CompilerOptions.VERSION_1_4)); //$NON-NLS-1$
+	}
+
+	// check and set compliance/source/target compatibilities
+	if (this.didSpecifyTarget) {
+		final Object targetVersion = this.options.get(CompilerOptions.OPTION_TargetPlatform);
+		// tolerate jsr14 target
+		if (CompilerOptions.VERSION_JSR14.equals(targetVersion)) {
+			// expecting source >= 1.5
+			if (CompilerOptions.versionToJdkLevel(sourceVersion) < ClassFileConstants.JDK1_5) {
+				throw new IllegalArgumentException(this.bind("configure.incompatibleTargetForGenericSource", (String) targetVersion, (String) sourceVersion)); //$NON-NLS-1$
+			}
+		} else if (CompilerOptions.VERSION_CLDC1_1.equals(targetVersion)) {
+			if (this.didSpecifySource && CompilerOptions.versionToJdkLevel(sourceVersion) >= ClassFileConstants.JDK1_4) {
+				throw new IllegalArgumentException(this.bind("configure.incompatibleSourceForCldcTarget", (String) targetVersion, (String) sourceVersion)); //$NON-NLS-1$
+			}
+			if (CompilerOptions.versionToJdkLevel(compliance) >= ClassFileConstants.JDK1_5) {
+				throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForCldcTarget", (String) targetVersion, (String) sourceVersion)); //$NON-NLS-1$
+			}
+		} else {
+			// target must be 1.7 if source is 1.7
+			if (CompilerOptions.versionToJdkLevel(sourceVersion) >= ClassFileConstants.JDK1_7
+					&& CompilerOptions.versionToJdkLevel(targetVersion) < ClassFileConstants.JDK1_7){
+				throw new IllegalArgumentException(this.bind("configure.incompatibleTargetForSource", (String) targetVersion, CompilerOptions.VERSION_1_7)); //$NON-NLS-1$
+			}
+			// target must be 1.6 if source is 1.6
+			if (CompilerOptions.versionToJdkLevel(sourceVersion) >= ClassFileConstants.JDK1_6
+					&& CompilerOptions.versionToJdkLevel(targetVersion) < ClassFileConstants.JDK1_6){
+				throw new IllegalArgumentException(this.bind("configure.incompatibleTargetForSource", (String) targetVersion, CompilerOptions.VERSION_1_6)); //$NON-NLS-1$
+			}
+			// target must be 1.5 if source is 1.5
+			if (CompilerOptions.versionToJdkLevel(sourceVersion) >= ClassFileConstants.JDK1_5
+					&& CompilerOptions.versionToJdkLevel(targetVersion) < ClassFileConstants.JDK1_5){
+				throw new IllegalArgumentException(this.bind("configure.incompatibleTargetForSource", (String) targetVersion, CompilerOptions.VERSION_1_5)); //$NON-NLS-1$
+			}
+			// target must be 1.4 if source is 1.4
+			if (CompilerOptions.versionToJdkLevel(sourceVersion) >= ClassFileConstants.JDK1_4
+					&& CompilerOptions.versionToJdkLevel(targetVersion) < ClassFileConstants.JDK1_4){
+				throw new IllegalArgumentException(this.bind("configure.incompatibleTargetForSource", (String) targetVersion, CompilerOptions.VERSION_1_4)); //$NON-NLS-1$
+			}
+			// target cannot be greater than compliance level
+			if (CompilerOptions.versionToJdkLevel(compliance) < CompilerOptions.versionToJdkLevel(targetVersion)){
+				throw new IllegalArgumentException(this.bind("configure.incompatibleComplianceForTarget", (String)this.options.get(CompilerOptions.OPTION_Compliance), (String) targetVersion)); //$NON-NLS-1$
+			}
+		}
+	}
+}
+}
+>>>>>>> patch

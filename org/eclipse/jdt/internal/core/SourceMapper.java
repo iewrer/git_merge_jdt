@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -78,6 +79,90 @@ public class SourceMapper
 	extends ReferenceInfoAdapter
 	implements ISourceElementRequestor, SuffixConstants {
 
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Kelly Campbell <kellyc@google.com> - Hangs in SourceMapper during java proposals - https://bugs.eclipse.org/bugs/show_bug.cgi?id=281575
+ *     Stephan Herrmann - Contribution for Bug 380048 - error popup when navigating to source files
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core;
+// GROOVY PATCHED
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
+import org.eclipse.core.resources.IContainer;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.Flags;
+import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.jdt.core.IField;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IMember;
+import org.eclipse.jdt.core.IMethod;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.core.ISourceRange;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.ITypeParameter;
+import org.eclipse.jdt.core.JavaConventions;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.Signature;
+import org.eclipse.jdt.core.SourceRange;
+import org.eclipse.jdt.core.compiler.CategorizedProblem;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.ISourceElementRequestor;
+import org.eclipse.jdt.internal.compiler.SourceElementParser;
+import org.eclipse.jdt.internal.compiler.ast.Expression;
+import org.eclipse.jdt.internal.compiler.ast.ImportReference;
+import org.eclipse.jdt.internal.compiler.env.IBinaryType;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jdt.internal.core.util.ReferenceInfoAdapter;
+
+/**
+ * A SourceMapper maps source code in a ZIP file to binary types in
+ * a JAR. The SourceMapper uses the fuzzy parser to identify source
+ * fragments in a .java file, and attempts to match the source code
+ * with children in a binary type. A SourceMapper is associated
+ * with a JarPackageFragment by an AttachSourceOperation.
+ *
+ * @see org.eclipse.jdt.internal.core.JarPackageFragment
+ */
+public class SourceMapper
+	extends ReferenceInfoAdapter
+	implements ISourceElementRequestor, SuffixConstants {
+
+>>>>>>> patch
 	public static class LocalVariableElementKey {
 		String parent;
 		String name;
@@ -1149,7 +1234,7 @@ public class SourceMapper
 					return UNKNOWN_RANGE;
 				} else {
 					return ranges[1];
-				}
+		}
 		}
 		SourceRange[] ranges = (SourceRange[]) this.sourceRanges.get(element);
 		if (ranges == null) {
@@ -1428,7 +1513,12 @@ public class SourceMapper
 				}
 			}
 			boolean doFullParse = hasToRetrieveSourceRangesForLocalClass(fullName);
-			parser = new SourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals*/);
+	        // GROOVY start
+	        /* old {
+			parser = new SourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals..);
+	        } new */
+			parser = LanguageSupportFactory.getSourceElementParser(this, factory, new CompilerOptions(this.options), doFullParse, true/*optimize string literals*/, true);
+	        // GROOVY end
 			parser.javadocParser.checkDocComment = false; // disable javadoc parsing
 			IJavaElement javaElement = this.binaryType.getCompilationUnit();
 			if (javaElement == null) javaElement = this.binaryType.getParent();
@@ -1436,6 +1526,17 @@ public class SourceMapper
 				new BasicCompilationUnit(contents, null, this.binaryType.sourceFileName(info), javaElement),
 				doFullParse,
 				null/*no progress*/);
+			// GROOVY start
+	        // if this is an interesting file in an interesting project,
+			// then filter out all binary members that do not have a direct
+			// mapping to the source
+			IProject project = javaElement.getJavaProject().getProject();
+			if (LanguageSupportFactory.isInterestingProject(project) && 
+					LanguageSupportFactory.isInterestingSourceFile(this.binaryType.getSourceFileName(info))) {
+				LanguageSupportFactory.filterNonSourceMembers(this.binaryType);
+			}
+			
+			// GROOVY end
 			if (elementToFind != null) {
 				ISourceRange range = getNameRange(elementToFind);
 				return range;

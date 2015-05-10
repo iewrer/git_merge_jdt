@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -77,6 +78,87 @@ public abstract class SearchPattern {
 
 	/**
 	 * Match rule: The search pattern contains a regular expression.
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.core.search;
+
+import java.io.IOException;
+
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.OperationCanceledException;
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.env.AccessRuleSet;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.parser.ScannerHelper;
+import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
+import org.eclipse.jdt.internal.core.LocalVariable;
+import org.eclipse.jdt.internal.core.index.EntryResult;
+import org.eclipse.jdt.internal.core.index.Index;
+import org.eclipse.jdt.internal.core.search.HierarchyScope;
+import org.eclipse.jdt.internal.core.search.IndexQueryRequestor;
+import org.eclipse.jdt.internal.core.search.JavaSearchScope;
+import org.eclipse.jdt.internal.core.search.StringOperation;
+import org.eclipse.jdt.internal.core.search.indexing.IIndexConstants;
+import org.eclipse.jdt.internal.core.search.matching.*;
+
+
+/**
+ * A search pattern defines how search results are found. Use <code>SearchPattern.createPattern</code>
+ * to create a search pattern.
+ * <p>
+ * Search patterns are used during the search phase to decode index entries that were added during the indexing phase
+ * (see {@link SearchDocument#addIndexEntry(char[], char[])}). When an index is queried, the
+ * index categories and keys to consider are retrieved from the search pattern using {@link #getIndexCategories()} and
+ * {@link #getIndexKey()}, as well as the match rule (see {@link #getMatchRule()}). A blank pattern is
+ * then created (see {@link #getBlankPattern()}). This blank pattern is used as a record as follows.
+ * For each index entry in the given index categories and that starts with the given key, the blank pattern is fed using
+ * {@link #decodeIndexKey(char[])}. The original pattern is then asked if it matches the decoded key using
+ * {@link #matchesDecodedKey(SearchPattern)}. If it matches, a search document is created for this index entry
+ * using {@link SearchParticipant#getDocument(String)}.
+ *
+ * </p><p>
+ * This class is intended to be sub-classed by clients. A default behavior is provided for each of the methods above, that
+ * clients can override if they wish.
+ * </p>
+ * @see #createPattern(org.eclipse.jdt.core.IJavaElement, int)
+ * @see #createPattern(String, int, int, int)
+ * @since 3.0
+ */
+public abstract class SearchPattern {
+
+	// Rules for pattern matching: (exact, prefix, pattern) [ | case sensitive]
+	/**
+	 * Match rule: The search pattern matches exactly the search result,
+	 * that is, the source of the search result equals the search pattern.
+	 */
+	public static final int R_EXACT_MATCH = 0;
+
+	/**
+	 * Match rule: The search pattern is a prefix of the search result.
+	 */
+	public static final int R_PREFIX_MATCH = 0x0001;
+
+	/**
+	 * Match rule: The search pattern contains one or more wild cards ('*' or '?').
+	 * A '*' wild-card can replace 0 or more characters in the search result.
+	 * A '?' wild-card replaces exactly 1 character in the search result.
+	 */
+	public static final int R_PATTERN_MATCH = 0x0002;
+
+	/**
+	 * Match rule: The search pattern contains a regular expression.
+>>>>>>> patch
 	 * <p><b>Warning:</b> The support for this rule is <b>not yet implemented</b></p>
 	 */
 	public static final int R_REGEXP_MATCH = 0x0004;
@@ -983,6 +1065,7 @@ private static SearchPattern createMethodOrConstructorPattern(String patternStri
 	// use 1.7 as the source level as there are more valid tokens in 1.7 mode
 	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=376673
 	Scanner scanner = new Scanner(false /*comment*/, true /*whitespace*/, false /*nls*/, ClassFileConstants.JDK1_7/*sourceLevel*/, null /*taskTags*/, null/*taskPriorities*/, true/*taskCaseSensitive*/);
+<<<<<<< HEAD
 	scanner.setSource(patternString.toCharArray());
 	final int InsideSelector = 1;
 	final int InsideTypeArguments = 2;
@@ -2154,6 +2237,1170 @@ private static SearchPattern createTypePattern(char[] simpleName, char[] package
 }
 
 private static SearchPattern createTypePattern(String patternString, int limitTo, int matchRule, char indexSuffix) {
+=======
+	scanner.setSource(patternString.toCharArray());
+	final int InsideSelector = 1;
+	final int InsideTypeArguments = 2;
+	final int InsideParameter = 3;
+	final int InsideReturnType = 4;
+	int lastToken = -1;
+
+	String declaringType = null, selector = null, parameterType = null;
+	String[] parameterTypes = null;
+	char[][] typeArguments = null;
+	String typeArgumentsString = null;
+	int parameterCount = -1;
+	String returnType = null;
+	boolean foundClosingParenthesis = false;
+	int mode = InsideSelector;
+	int token, argCount = 0;
+	try {
+		token = scanner.getNextToken();
+	} catch (InvalidInputException e) {
+		return null;
+	}
+	while (token != TerminalTokens.TokenNameEOF) {
+		switch(mode) {
+			// read declaring type and selector
+			case InsideSelector :
+				if (argCount == 0) {
+					switch (token) {
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							if (selector == null || lastToken == TerminalTokens.TokenNameDOT) {
+								typeArgumentsString = scanner.getCurrentTokenString();
+								mode = InsideTypeArguments;
+								break;
+							}
+							if (declaringType == null) {
+								declaringType = selector;
+							} else {
+								declaringType += '.' + selector;
+							}
+							declaringType += scanner.getCurrentTokenString();
+							selector = null;
+							break;
+						case TerminalTokens.TokenNameDOT:
+							if (!isConstructor && typeArgumentsString != null) return null; // invalid syntax
+							if (declaringType == null) {
+								if (selector == null) return null; // invalid syntax
+								declaringType = selector;
+							} else if (selector != null) {
+								declaringType += scanner.getCurrentTokenString() + selector;
+							}
+							selector = null;
+							break;
+						case TerminalTokens.TokenNameLPAREN:
+							parameterTypes = new String[5];
+							parameterCount = 0;
+							mode = InsideParameter;
+							break;
+						case TerminalTokens.TokenNameWHITESPACE:
+							switch (lastToken) {
+								case TerminalTokens.TokenNameWHITESPACE:
+								case TerminalTokens.TokenNameDOT:
+								case TerminalTokens.TokenNameGREATER:
+								case TerminalTokens.TokenNameRIGHT_SHIFT:
+								case TerminalTokens.TokenNameUNSIGNED_RIGHT_SHIFT:
+									break;
+								default:
+									mode = InsideReturnType;
+									break;
+							}
+							break;
+						default: // all other tokens are considered identifiers (see bug 21763 Problem in Java search [search])
+							if (selector == null)
+								selector = scanner.getCurrentTokenString();
+							else
+								selector += scanner.getCurrentTokenString();
+							break;
+					}
+				} else {
+					if (declaringType == null) return null; // invalid syntax
+					switch (token) {
+						case TerminalTokens.TokenNameGREATER:
+						case TerminalTokens.TokenNameRIGHT_SHIFT:
+						case TerminalTokens.TokenNameUNSIGNED_RIGHT_SHIFT:
+							argCount--;
+							break;
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							break;
+					}
+					declaringType += scanner.getCurrentTokenString();
+				}
+				break;
+			// read type arguments
+			case InsideTypeArguments:
+				if (typeArgumentsString == null) return null; // invalid syntax
+				typeArgumentsString += scanner.getCurrentTokenString();
+				switch (token) {
+					case TerminalTokens.TokenNameGREATER:
+					case TerminalTokens.TokenNameRIGHT_SHIFT:
+					case TerminalTokens.TokenNameUNSIGNED_RIGHT_SHIFT:
+						argCount--;
+						if (argCount == 0) {
+							String pseudoType = "Type"+typeArgumentsString; //$NON-NLS-1$
+							typeArguments = Signature.getTypeArguments(Signature.createTypeSignature(pseudoType, false).toCharArray());
+							mode = InsideSelector;
+						}
+						break;
+					case TerminalTokens.TokenNameLESS:
+						argCount++;
+						break;
+				}
+				break;
+			// read parameter types
+			case InsideParameter :
+				if (argCount == 0) {
+					switch (token) {
+						case TerminalTokens.TokenNameWHITESPACE:
+							break;
+						case TerminalTokens.TokenNameCOMMA:
+							if (parameterType == null) return null;
+							if (parameterTypes != null) {
+								if (parameterTypes.length == parameterCount)
+									System.arraycopy(parameterTypes, 0, parameterTypes = new String[parameterCount*2], 0, parameterCount);
+								parameterTypes[parameterCount++] = parameterType;
+							}
+							parameterType = null;
+							break;
+						case TerminalTokens.TokenNameRPAREN:
+							foundClosingParenthesis = true;
+							if (parameterType != null && parameterTypes != null) {
+								if (parameterTypes.length == parameterCount)
+									System.arraycopy(parameterTypes, 0, parameterTypes = new String[parameterCount*2], 0, parameterCount);
+								parameterTypes[parameterCount++] = parameterType;
+							}
+							mode = isConstructor ? InsideTypeArguments : InsideReturnType;
+							break;
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							if (parameterType == null) return null; // invalid syntax
+							// $FALL-THROUGH$ - fall through next case to add token
+						default: // all other tokens are considered identifiers (see bug 21763 Problem in Java search [search])
+							if (parameterType == null)
+								parameterType = scanner.getCurrentTokenString();
+							else
+								parameterType += scanner.getCurrentTokenString();
+					}
+				} else {
+					if (parameterType == null) return null; // invalid syntax
+					switch (token) {
+						case TerminalTokens.TokenNameGREATER:
+						case TerminalTokens.TokenNameRIGHT_SHIFT:
+						case TerminalTokens.TokenNameUNSIGNED_RIGHT_SHIFT:
+							argCount--;
+							break;
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							break;
+					}
+					parameterType += scanner.getCurrentTokenString();
+				}
+				break;
+			// read return type
+			case InsideReturnType:
+				if (argCount == 0) {
+					switch (token) {
+						case TerminalTokens.TokenNameWHITESPACE:
+							break;
+						case TerminalTokens.TokenNameLPAREN:
+							parameterTypes = new String[5];
+							parameterCount = 0;
+							mode = InsideParameter;
+							break;
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							if (returnType == null) return null; // invalid syntax
+							// $FALL-THROUGH$ - fall through next case to add token
+						default: // all other tokens are considered identifiers (see bug 21763 Problem in Java search [search])
+							if (returnType == null)
+								returnType = scanner.getCurrentTokenString();
+							else
+								returnType += scanner.getCurrentTokenString();
+					}
+				} else {
+					if (returnType == null) return null; // invalid syntax
+					switch (token) {
+						case TerminalTokens.TokenNameGREATER:
+						case TerminalTokens.TokenNameRIGHT_SHIFT:
+						case TerminalTokens.TokenNameUNSIGNED_RIGHT_SHIFT:
+							argCount--;
+							break;
+						case TerminalTokens.TokenNameLESS:
+							argCount++;
+							break;
+					}
+					returnType += scanner.getCurrentTokenString();
+				}
+				break;
+		}
+		lastToken = token;
+		try {
+			token = scanner.getNextToken();
+		} catch (InvalidInputException e) {
+			return null;
+		}
+	}
+	// parenthesis mismatch
+	if (parameterCount>0 && !foundClosingParenthesis) return null;
+	// type arguments mismatch
+	if (argCount > 0) return null;
+
+	char[] selectorChars = null;
+	if (isConstructor) {
+		// retrieve type for constructor patterns
+		if (declaringType == null)
+			declaringType = selector;
+		else if (selector != null)
+			declaringType += '.' + selector;
+	} else {
+		// get selector chars
+		if (selector == null) return null;
+		selectorChars = selector.toCharArray();
+		if (selectorChars.length == 1 && selectorChars[0] == '*')
+			selectorChars = null;
+	}
+
+	char[] declaringTypeQualification = null, declaringTypeSimpleName = null;
+	char[] returnTypeQualification = null, returnTypeSimpleName = null;
+	char[][] parameterTypeQualifications = null, parameterTypeSimpleNames = null;
+	// Signatures
+	String declaringTypeSignature = null;
+	String returnTypeSignature = null;
+	String[] parameterTypeSignatures = null;
+
+	// extract declaring type infos
+	if (declaringType != null) {
+		// get declaring type part and signature
+		char[] declaringTypePart = null;
+		try {
+			declaringTypeSignature = Signature.createTypeSignature(declaringType, false);
+			if (declaringTypeSignature.indexOf(Signature.C_GENERIC_START) < 0) {
+				declaringTypePart = declaringType.toCharArray();
+			} else {
+				declaringTypePart = Signature.toCharArray(Signature.getTypeErasure(declaringTypeSignature.toCharArray()));
+			}
+		}
+		catch (IllegalArgumentException iae) {
+			// declaring type is invalid
+			return null;
+		}
+		int lastDotPosition = CharOperation.lastIndexOf('.', declaringTypePart);
+		if (lastDotPosition >= 0) {
+			declaringTypeQualification = CharOperation.subarray(declaringTypePart, 0, lastDotPosition);
+			if (declaringTypeQualification.length == 1 && declaringTypeQualification[0] == '*')
+				declaringTypeQualification = null;
+			declaringTypeSimpleName = CharOperation.subarray(declaringTypePart, lastDotPosition+1, declaringTypePart.length);
+		} else {
+			declaringTypeSimpleName = declaringTypePart;
+		}
+		if (declaringTypeSimpleName.length == 1 && declaringTypeSimpleName[0] == '*')
+			declaringTypeSimpleName = null;
+	}
+	// extract parameter types infos
+	if (parameterCount >= 0) {
+		parameterTypeQualifications = new char[parameterCount][];
+		parameterTypeSimpleNames = new char[parameterCount][];
+		parameterTypeSignatures = new String[parameterCount];
+		for (int i = 0; i < parameterCount; i++) {
+			// get parameter type part and signature
+			char[] parameterTypePart = null;
+			try {
+				if (parameterTypes != null) {
+					parameterTypeSignatures[i] = Signature.createTypeSignature(parameterTypes[i], false);
+					if (parameterTypeSignatures[i].indexOf(Signature.C_GENERIC_START) < 0) {
+						parameterTypePart = parameterTypes[i].toCharArray();
+					} else {
+						parameterTypePart = Signature.toCharArray(Signature.getTypeErasure(parameterTypeSignatures[i].toCharArray()));
+					}
+				}
+			}
+			catch (IllegalArgumentException iae) {
+				// string is not a valid type syntax
+				return null;
+			}
+			int lastDotPosition = parameterTypePart==null ? -1 : CharOperation.lastIndexOf('.', parameterTypePart);
+			if (parameterTypePart != null && lastDotPosition >= 0) {
+				parameterTypeQualifications[i] = CharOperation.subarray(parameterTypePart, 0, lastDotPosition);
+				if (parameterTypeQualifications[i].length == 1 && parameterTypeQualifications[i][0] == '*') {
+					parameterTypeQualifications[i] = null;
+				} else {
+					// prefix with a '*' as the full qualification could be bigger (because of an import)
+					parameterTypeQualifications[i] = CharOperation.concat(IIndexConstants.ONE_STAR, parameterTypeQualifications[i]);
+				}
+				parameterTypeSimpleNames[i] = CharOperation.subarray(parameterTypePart, lastDotPosition+1, parameterTypePart.length);
+			} else {
+				parameterTypeQualifications[i] = null;
+				parameterTypeSimpleNames[i] = parameterTypePart;
+			}
+			if (parameterTypeSimpleNames[i].length == 1 && parameterTypeSimpleNames[i][0] == '*')
+				parameterTypeSimpleNames[i] = null;
+		}
+	}
+	// extract return type infos
+	if (returnType != null) {
+		// get return type part and signature
+		char[] returnTypePart = null;
+		try {
+			returnTypeSignature = Signature.createTypeSignature(returnType, false);
+			if (returnTypeSignature.indexOf(Signature.C_GENERIC_START) < 0) {
+				returnTypePart = returnType.toCharArray();
+			} else {
+				returnTypePart = Signature.toCharArray(Signature.getTypeErasure(returnTypeSignature.toCharArray()));
+			}
+		}
+		catch (IllegalArgumentException iae) {
+			// declaring type is invalid
+			return null;
+		}
+		int lastDotPosition = CharOperation.lastIndexOf('.', returnTypePart);
+		if (lastDotPosition >= 0) {
+			returnTypeQualification = CharOperation.subarray(returnTypePart, 0, lastDotPosition);
+			if (returnTypeQualification.length == 1 && returnTypeQualification[0] == '*') {
+				returnTypeQualification = null;
+			} else {
+				// because of an import
+				returnTypeQualification = CharOperation.concat(IIndexConstants.ONE_STAR, returnTypeQualification);
+			}
+			returnTypeSimpleName = CharOperation.subarray(returnTypePart, lastDotPosition+1, returnTypePart.length);
+		} else {
+			returnTypeSimpleName = returnTypePart;
+		}
+		if (returnTypeSimpleName.length == 1 && returnTypeSimpleName[0] == '*')
+			returnTypeSimpleName = null;
+	}
+	// Create method/constructor pattern
+	if (isConstructor) {
+		return new ConstructorPattern(
+				declaringTypeSimpleName,
+				declaringTypeQualification,
+				declaringTypeSignature,
+				parameterTypeQualifications,
+				parameterTypeSimpleNames,
+				parameterTypeSignatures,
+				typeArguments,
+				limitTo,
+				matchRule);
+	} else {
+		return new MethodPattern(
+				selectorChars,
+				declaringTypeQualification,
+				declaringTypeSimpleName,
+				declaringTypeSignature,
+				returnTypeQualification,
+				returnTypeSimpleName,
+				returnTypeSignature,
+				parameterTypeQualifications,
+				parameterTypeSimpleNames,
+				parameterTypeSignatures,
+				typeArguments,
+				limitTo,
+				matchRule);
+	}
+}
+
+/**
+ * Returns a search pattern that combines the given two patterns into an
+ * "or" pattern. The search result will match either the left pattern or the
+ * right pattern.
+ *
+ * @param leftPattern the left pattern
+ * @param rightPattern the right pattern
+ * @return an "or" pattern
+ */
+public static SearchPattern createOrPattern(SearchPattern leftPattern, SearchPattern rightPattern) {
+	return new OrPattern(leftPattern, rightPattern);
+}
+
+private static SearchPattern createPackagePattern(String patternString, int limitTo, int matchRule) {
+	switch (limitTo) {
+		case IJavaSearchConstants.DECLARATIONS :
+			return new PackageDeclarationPattern(patternString.toCharArray(), matchRule);
+		case IJavaSearchConstants.REFERENCES :
+			return new PackageReferencePattern(patternString.toCharArray(), matchRule);
+		case IJavaSearchConstants.ALL_OCCURRENCES :
+			return new OrPattern(
+				new PackageDeclarationPattern(patternString.toCharArray(), matchRule),
+				new PackageReferencePattern(patternString.toCharArray(), matchRule)
+			);
+	}
+	return null;
+}
+
+/**
+ * Returns a search pattern based on a given string pattern. The string patterns support '*' wild-cards.
+ * The remaining parameters are used to narrow down the type of expected results.
+ *
+ * <br>
+ *	Examples:
+ *	<ul>
+ * 		<li>search for case insensitive references to <code>Object</code>:
+ *			<code>createSearchPattern("Object", IJavaSearchConstants.TYPE, IJavaSearchConstants.REFERENCES, false);</code></li>
+ *  	<li>search for case sensitive references to exact <code>Object()</code> constructor:
+ *			<code>createSearchPattern("java.lang.Object()", IJavaSearchConstants.CONSTRUCTOR, IJavaSearchConstants.REFERENCES, true);</code></li>
+ *  	<li>search for implementers of <code>java.lang.Runnable</code>:
+ *			<code>createSearchPattern("java.lang.Runnable", IJavaSearchConstants.TYPE, IJavaSearchConstants.IMPLEMENTORS, true);</code></li>
+ *  </ul>
+ * @param stringPattern the given pattern
+ * <ul>
+ * 	<li>Type patterns have the following syntax:
+ * 		<p><b><code>[qualification '.']typeName ['&lt;' typeArguments '&gt;']</code></b></p>
+ *			<p>Examples:</p>
+ *			<ul>
+ * 			<li><code>java.lang.Object</code></li>
+ *				<li><code>Runnable</code></li>
+ *				<li><code>List&lt;String&gt;</code></li>
+ *			</ul>
+ *			<p>
+ *			Type arguments can be specified to search for references to parameterized types
+ * 		using following syntax:</p><p>
+ * 		<b><code>'&lt;' { [ '?' {'extends'|'super'} ] type ( ',' [ '?' {'extends'|'super'} ] type )* | '?' } '&gt;'</code></b>
+ * 		</p><div style="font-style:italic;">
+ * 		Note that:
+ * 		<ul>
+ * 			<li>'*' is not valid inside type arguments definition &lt;&gt;</li>
+ * 			<li>'?' is treated as a wildcard when it is inside &lt;&gt; (i.e. it must be put on first position of the type argument)</li>
+ * 		</ul>
+ * 		</div>
+ * 	</li>
+ * 	<li>Method patterns have the following syntax:
+ * 		<p><b><code>[declaringType '.'] ['&lt;' typeArguments '&gt;'] methodName ['(' parameterTypes ')'] [returnType]</code></b></p>
+ *			<p>Type arguments have the same syntax as explained in the type patterns section.</p>
+ *			<p>Examples:</p>
+ *			<ul>
+ *				<li><code>java.lang.Runnable.run() void</code></li>
+ *				<li><code>main(*)</code></li>
+ *				<li><code>&lt;String&gt;toArray(String[])</code></li>
+ *			</ul>
+ *	</li>
+ * 	<li>Constructor patterns have the following syntax:
+ *			<p><b><code>['&lt;' typeArguments '&gt;'] [declaringQualification '.'] typeName ['(' parameterTypes ')']</code></b></p>
+ *			<p>Type arguments have the same syntax as explained in the type patterns section.</p>
+ *			<p><i>Note that the constructor name should not be entered as it is always the same as the type name.</i></p>
+ *			<p>Examples:</p>
+ *			<ul>
+ *				<li><code>java.lang.Object()</code></li>
+ *				<li><code>Test(*)</code></li>
+ *				<li><code>&lt;Exception&gt;Sample(Exception)</code></li>
+ *			</ul>
+ * 		<br>
+ * 	</li>
+ * 	<li>Field patterns have the following syntax:
+ *			<p><b><code>[declaringType '.'] fieldName [fieldType]</code></b></p>
+ *			<p>Examples:</p>
+ *			<ul>
+ *				<li><code>java.lang.String.serialVersionUID long</code></li>
+ *				<li><code>field*</code></li>
+ *			</ul>
+ * 	</li>
+ * 	<li>Package patterns have the following syntax:
+ *			<p><b><code>packageNameSegment {'.' packageNameSegment}</code></b></p>
+ *			<p>Examples:</p>
+ *			<ul>
+ *				<li><code>java.lang</code></li>
+ *				<li><code>org.e*.jdt.c*e</code></li>
+ *			</ul>
+ * 	</li>
+ * </ul>
+ * @param searchFor determines the nature of the searched elements
+ *	<ul>
+ * 	<li>{@link IJavaSearchConstants#CLASS}: only look for classes</li>
+ *	<li>{@link IJavaSearchConstants#INTERFACE}: only look for interfaces</li>
+ * 	<li>{@link IJavaSearchConstants#ENUM}: only look for enumeration</li>
+ *	<li>{@link IJavaSearchConstants#ANNOTATION_TYPE}: only look for annotation type</li>
+ * 	<li>{@link IJavaSearchConstants#CLASS_AND_ENUM}: only look for classes and enumerations</li>
+ *	<li>{@link IJavaSearchConstants#CLASS_AND_INTERFACE}: only look for classes and interfaces</li>
+ * 	<li>{@link IJavaSearchConstants#TYPE}: look for all types (i.e. classes, interfaces, enum and annotation types)</li>
+ *	<li>{@link IJavaSearchConstants#FIELD}: look for fields</li>
+ *	<li>{@link IJavaSearchConstants#METHOD}: look for methods</li>
+ *	<li>{@link IJavaSearchConstants#CONSTRUCTOR}: look for constructors</li>
+ *	<li>{@link IJavaSearchConstants#PACKAGE}: look for packages</li>
+ *	</ul>
+ * @param limitTo determines the nature of the expected matches
+ *	<ul>
+ * 	<li>{@link IJavaSearchConstants#DECLARATIONS DECLARATIONS}: will search declarations matching
+ * 			with the corresponding element. In case the element is a method, declarations of matching
+ * 			methods in sub-types will also be found, allowing to find declarations of abstract methods, etc.<br>
+ * 			Note that additional flags {@link IJavaSearchConstants#IGNORE_DECLARING_TYPE IGNORE_DECLARING_TYPE} and
+ * 			{@link IJavaSearchConstants#IGNORE_RETURN_TYPE IGNORE_RETURN_TYPE} are ignored for string patterns.
+ * 			This is due to the fact that client may omit to define them in string pattern to have same behavior.
+ * 	</li>
+ *		 <li>{@link IJavaSearchConstants#REFERENCES REFERENCES}: will search references to the given element.</li>
+ *		 <li>{@link IJavaSearchConstants#ALL_OCCURRENCES ALL_OCCURRENCES}: will search for either declarations or
+ *				references as specified above.
+ *		</li>
+ *		 <li>{@link IJavaSearchConstants#IMPLEMENTORS IMPLEMENTORS}: for types, will find all types
+ *				which directly implement/extend a given interface.
+ *				Note that types may be only classes or only interfaces if {@link IJavaSearchConstants#CLASS CLASS} or
+ *				{@link IJavaSearchConstants#INTERFACE INTERFACE} is respectively used instead of {@link IJavaSearchConstants#TYPE TYPE}.
+ *		</li>
+ *		 <li>All other fine grain constants defined in the <b>limitTo</b> category
+ *				of the {@link IJavaSearchConstants} are also accepted nature: 
+ * 			<table border=0>
+ *     			<tr>
+ *         		<th align=left>Fine grain constant
+ *         		<th align=left>Meaning
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#FIELD_DECLARATION_TYPE_REFERENCE FIELD_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a field declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a local variable declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#PARAMETER_DECLARATION_TYPE_REFERENCE PARAMETER_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a method parameter declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPERTYPE_TYPE_REFERENCE SUPERTYPE_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a super type or as a super interface.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THROWS_CLAUSE_TYPE_REFERENCE THROWS_CLAUSE_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a throws clause.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CAST_TYPE_REFERENCE CAST_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a cast expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CATCH_TYPE_REFERENCE CATCH_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a catch header.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CLASS_INSTANCE_CREATION_TYPE_REFERENCE CLASS_INSTANCE_CREATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in class instance creation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#RETURN_TYPE_REFERENCE RETURN_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a method return type.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPORT_DECLARATION_TYPE_REFERENCE IMPORT_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in an import declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#ANNOTATION_TYPE_REFERENCE ANNOTATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as an annotation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_ARGUMENT_TYPE_REFERENCE TYPE_ARGUMENT_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type argument in a parameterized type or a parameterized method.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_VARIABLE_BOUND_TYPE_REFERENCE TYPE_VARIABLE_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type variable bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#WILDCARD_BOUND_TYPE_REFERENCE WILDCARD_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a wildcard bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#INSTANCEOF_TYPE_REFERENCE INSTANCEOF_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type of an <code>instanceof</code> expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPER_REFERENCE SUPER_REFERENCE}
+ *         		<td>Return only super field accesses or super method invocations (e.g. using the <code>super</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#QUALIFIED_REFERENCE QUALIFIED_REFERENCE}
+ *         		<td>Return only qualified field accesses or qualified method invocations.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THIS_REFERENCE THIS_REFERENCE}
+ *         		<td>Return only primary field accesses or primary method invocations (e.g. using the <code>this</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPLICIT_THIS_REFERENCE IMPLICIT_THIS_REFERENCE}
+ *         		<td>Return only field accesses or method invocations without any qualification.
+ * 			</table>
+ *		</li>
+ *	</ul>
+ * @param matchRule one of the following match rules
+ * 	<ul>
+ * 		<li>{@link #R_EXACT_MATCH}</li>
+ * 		<li>{@link #R_PREFIX_MATCH}</li>
+ * 		<li>{@link #R_PATTERN_MATCH}</li>
+ * 		<li>{@link #R_CAMELCASE_MATCH}</li>
+ * 		<li>{@link #R_CAMELCASE_SAME_PART_COUNT_MATCH}</li>
+ * 	</ul>
+ * 	, which may be also combined with one of the following flags:
+ * 	<ul>
+ * 		<li>{@link #R_CASE_SENSITIVE}</li>
+ * 		<li>{@link #R_ERASURE_MATCH}</li>
+ * 		<li>{@link #R_EQUIVALENT_MATCH}</li>
+ * 	</ul>
+ *		For example,
+ *		<ul>
+ *			<li>{@link #R_EXACT_MATCH} | {@link #R_CASE_SENSITIVE}: if an exact
+ *				and case sensitive match is requested,</li>
+ *			<li>{@link #R_PREFIX_MATCH} if a case insensitive prefix match is requested</li>
+ *			<li>{@link #R_EXACT_MATCH} | {@link #R_ERASURE_MATCH}: if a case
+ *				insensitive and erasure match is requested.</li>
+ *		</ul>
+ * 	<p>Note that {@link #R_ERASURE_MATCH} or {@link #R_EQUIVALENT_MATCH} has no effect
+ * 	on non-generic types/methods search.</p>
+ * 	<p>
+ * 	Note also that the default behavior for generic types/methods search is to find exact matches.</p>
+ * @return a search pattern on the given string pattern, or <code>null</code> if the string pattern is ill-formed
+ */
+public static SearchPattern createPattern(String stringPattern, int searchFor, int limitTo, int matchRule) {
+	if (stringPattern == null || stringPattern.length() == 0) return null;
+
+	if ((matchRule = validateMatchRule(stringPattern, matchRule)) == -1) {
+		return null;
+	}
+
+	// Ignore additional nature flags
+	limitTo &= ~(IJavaSearchConstants.IGNORE_DECLARING_TYPE+IJavaSearchConstants.IGNORE_RETURN_TYPE);
+
+	switch (searchFor) {
+		case IJavaSearchConstants.CLASS:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.CLASS_SUFFIX);
+		case IJavaSearchConstants.CLASS_AND_INTERFACE:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.CLASS_AND_INTERFACE_SUFFIX);
+		case IJavaSearchConstants.CLASS_AND_ENUM:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.CLASS_AND_ENUM_SUFFIX);
+		case IJavaSearchConstants.INTERFACE:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.INTERFACE_SUFFIX);
+		case IJavaSearchConstants.INTERFACE_AND_ANNOTATION:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.INTERFACE_AND_ANNOTATION_SUFFIX);
+		case IJavaSearchConstants.ENUM:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.ENUM_SUFFIX);
+		case IJavaSearchConstants.ANNOTATION_TYPE:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.ANNOTATION_TYPE_SUFFIX);
+		case IJavaSearchConstants.TYPE:
+			return createTypePattern(stringPattern, limitTo, matchRule, IIndexConstants.TYPE_SUFFIX);
+		case IJavaSearchConstants.METHOD:
+			return createMethodOrConstructorPattern(stringPattern, limitTo, matchRule, false/*not a constructor*/);
+		case IJavaSearchConstants.CONSTRUCTOR:
+			return createMethodOrConstructorPattern(stringPattern, limitTo, matchRule, true/*constructor*/);
+		case IJavaSearchConstants.FIELD:
+			return createFieldPattern(stringPattern, limitTo, matchRule);
+		case IJavaSearchConstants.PACKAGE:
+			return createPackagePattern(stringPattern, limitTo, matchRule);
+	}
+	return null;
+}
+
+/**
+ * Returns a search pattern based on a given Java element.
+ * The pattern is used to trigger the appropriate search.
+ * <br>
+ * Note that for generic searches, the returned pattern consider {@link #R_ERASURE_MATCH} matches.
+ * If other kind of generic matches (i.e. {@link #R_EXACT_MATCH} or {@link #R_EQUIVALENT_MATCH})
+ * are expected, {@link #createPattern(IJavaElement, int, int)} method need to be used instead with
+ * the explicit match rule specified.
+ * <br>
+ * The pattern can be parameterized as follows:
+ *
+ * @param element the Java element the search pattern is based on
+ * @param limitTo determines the nature of the expected matches
+ *	<ul>
+ * 	<li>{@link IJavaSearchConstants#DECLARATIONS DECLARATIONS}: will search declarations matching
+ * 			with the corresponding element. In case the element is a method, declarations of matching
+ * 			methods in sub-types will also be found, allowing to find declarations of abstract methods, etc.
+ *				Some additional flags may be specified while searching declaration:
+ *				<ul>
+ *					<li>{@link IJavaSearchConstants#IGNORE_DECLARING_TYPE IGNORE_DECLARING_TYPE}: declaring type will be ignored
+ *							during the search.<br>
+ *							For example using following test case:
+ *					<pre>
+ *                  class A { A method() { return null; } }
+ *                  class B extends A { B method() { return null; } }
+ *                  class C { A method() { return null; } }
+ *					</pre>
+ *							search for <code>method</code> declaration with this flag
+ *							will return 2 matches: in A and in C
+ *					</li>
+ *					<li>{@link IJavaSearchConstants#IGNORE_RETURN_TYPE IGNORE_RETURN_TYPE}: return type will be ignored
+ *							during the search.<br>
+ *							Using same example, search for <code>method</code> declaration with this flag
+ *							will return 2 matches: in A and in B.
+ *					</li>
+ *				</ul>
+ *				Note that these two flags may be combined and both declaring and return types can be ignored
+ *				during the search. Then, using same example, search for <code>method</code> declaration
+ *				with these 2 flags will return 3 matches: in A, in B  and in C
+ * 	</li>
+ *		 <li>{@link IJavaSearchConstants#REFERENCES REFERENCES}: will search references to the given element.</li>
+ *		 <li>{@link IJavaSearchConstants#ALL_OCCURRENCES ALL_OCCURRENCES}: will search for either declarations or
+ *				references as specified above.
+ *		</li>
+ *		 <li>All other fine grain constants defined in the <b>limitTo</b> category
+ *				of the {@link IJavaSearchConstants} are also accepted nature: 
+ * 			<table border=0>
+ *     			<tr>
+ *         		<th align=left>Fine grain constant
+ *         		<th align=left>Meaning
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#FIELD_DECLARATION_TYPE_REFERENCE FIELD_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a field declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a local variable declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#PARAMETER_DECLARATION_TYPE_REFERENCE PARAMETER_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a method parameter declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPERTYPE_TYPE_REFERENCE SUPERTYPE_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a super type or as a super interface.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THROWS_CLAUSE_TYPE_REFERENCE THROWS_CLAUSE_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a throws clause.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CAST_TYPE_REFERENCE CAST_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a cast expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CATCH_TYPE_REFERENCE CATCH_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a catch header.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CLASS_INSTANCE_CREATION_TYPE_REFERENCE CLASS_INSTANCE_CREATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in class instance creation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#RETURN_TYPE_REFERENCE RETURN_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a method return type.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPORT_DECLARATION_TYPE_REFERENCE IMPORT_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in an import declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#ANNOTATION_TYPE_REFERENCE ANNOTATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as an annotation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_ARGUMENT_TYPE_REFERENCE TYPE_ARGUMENT_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type argument in a parameterized type or a parameterized method.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_VARIABLE_BOUND_TYPE_REFERENCE TYPE_VARIABLE_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type variable bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#WILDCARD_BOUND_TYPE_REFERENCE WILDCARD_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a wildcard bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#INSTANCEOF_TYPE_REFERENCE INSTANCEOF_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type of an <code>instanceof</code> expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPER_REFERENCE SUPER_REFERENCE}
+ *         		<td>Return only super field accesses or super method invocations (e.g. using the <code>super</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#QUALIFIED_REFERENCE QUALIFIED_REFERENCE}
+ *         		<td>Return only qualified field accesses or qualified method invocations.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THIS_REFERENCE THIS_REFERENCE}
+ *         		<td>Return only primary field accesses or primary method invocations (e.g. using the <code>this</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPLICIT_THIS_REFERENCE IMPLICIT_THIS_REFERENCE}
+ *         		<td>Return only field accesses or method invocations without any qualification.
+ * 			</table>
+ *		</li>
+ *	</ul>
+ * @return a search pattern for a Java element or <code>null</code> if the given element is ill-formed
+ */
+public static SearchPattern createPattern(IJavaElement element, int limitTo) {
+	return createPattern(element, limitTo, R_EXACT_MATCH | R_CASE_SENSITIVE | R_ERASURE_MATCH);
+}
+
+/**
+ * Returns a search pattern based on a given Java element.
+ * The pattern is used to trigger the appropriate search, and can be parameterized as follows:
+ *
+ * @param element the Java element the search pattern is based on
+ * @param limitTo determines the nature of the expected matches
+ *	<ul>
+ * 	<li>{@link IJavaSearchConstants#DECLARATIONS DECLARATIONS}: will search declarations matching
+ * 			with the corresponding element. In case the element is a method, declarations of matching
+ * 			methods in sub-types will also be found, allowing to find declarations of abstract methods, etc.
+ *				Some additional flags may be specified while searching declaration:
+ *				<ul>
+ *					<li>{@link IJavaSearchConstants#IGNORE_DECLARING_TYPE IGNORE_DECLARING_TYPE}: declaring type will be ignored
+ *							during the search.<br>
+ *							For example using following test case:
+ *					<pre>
+ *                  class A { A method() { return null; } }
+ *                  class B extends A { B method() { return null; } }
+ *                  class C { A method() { return null; } }
+ *					</pre>
+ *							search for <code>method</code> declaration with this flag
+ *							will return 2 matches: in A and in C
+ *					</li>
+ *					<li>{@link IJavaSearchConstants#IGNORE_RETURN_TYPE IGNORE_RETURN_TYPE}: return type will be ignored
+ *							during the search.<br>
+ *							Using same example, search for <code>method</code> declaration with this flag
+ *							will return 2 matches: in A and in B.
+ *					</li>
+ *				</ul>
+ *				Note that these two flags may be combined and both declaring and return types can be ignored
+ *				during the search. Then, using same example, search for <code>method</code> declaration
+ *				with these 2 flags will return 3 matches: in A, in B  and in C
+ * 	</li>
+ *		 <li>{@link IJavaSearchConstants#REFERENCES REFERENCES}: will search references to the given element.</li>
+ *		 <li>{@link IJavaSearchConstants#ALL_OCCURRENCES ALL_OCCURRENCES}: will search for either declarations or
+ *				references as specified above.
+ *		</li>
+ *		 <li>All other fine grain constants defined in the <b>limitTo</b> category
+ *				of the {@link IJavaSearchConstants} are also accepted nature: 
+ * 			<table border=0>
+ *     			<tr>
+ *         		<th align=left>Fine grain constant
+ *         		<th align=left>Meaning
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#FIELD_DECLARATION_TYPE_REFERENCE FIELD_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a field declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a local variable declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#PARAMETER_DECLARATION_TYPE_REFERENCE PARAMETER_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as the type of a method parameter declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPERTYPE_TYPE_REFERENCE SUPERTYPE_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a super type or as a super interface.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THROWS_CLAUSE_TYPE_REFERENCE THROWS_CLAUSE_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a throws clause.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CAST_TYPE_REFERENCE CAST_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a cast expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CATCH_TYPE_REFERENCE CATCH_TYPE_REFERENCE}
+ *         		<td>Return only type references used in a catch header.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#CLASS_INSTANCE_CREATION_TYPE_REFERENCE CLASS_INSTANCE_CREATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in class instance creation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#RETURN_TYPE_REFERENCE RETURN_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a method return type.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPORT_DECLARATION_TYPE_REFERENCE IMPORT_DECLARATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used in an import declaration.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#ANNOTATION_TYPE_REFERENCE ANNOTATION_TYPE_REFERENCE}
+ *         		<td>Return only type references used as an annotation.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_ARGUMENT_TYPE_REFERENCE TYPE_ARGUMENT_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type argument in a parameterized type or a parameterized method.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#TYPE_VARIABLE_BOUND_TYPE_REFERENCE TYPE_VARIABLE_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type variable bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#WILDCARD_BOUND_TYPE_REFERENCE WILDCARD_BOUND_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a wildcard bound.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#INSTANCEOF_TYPE_REFERENCE INSTANCEOF_TYPE_REFERENCE}
+ *         		<td>Return only type references used as a type of an <code>instanceof</code> expression.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#SUPER_REFERENCE SUPER_REFERENCE}
+ *         		<td>Return only super field accesses or super method invocations (e.g. using the <code>super</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#QUALIFIED_REFERENCE QUALIFIED_REFERENCE}
+ *         		<td>Return only qualified field accesses or qualified method invocations.
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#THIS_REFERENCE THIS_REFERENCE}
+ *         		<td>Return only primary field accesses or primary method invocations (e.g. using the <code>this</code> qualifier).
+ *     			<tr>
+ *         		<td>{@link IJavaSearchConstants#IMPLICIT_THIS_REFERENCE IMPLICIT_THIS_REFERENCE}
+ *         		<td>Return only field accesses or method invocations without any qualification.
+ * 			</table>
+ * 	</li>
+ *	</ul>
+ * @param matchRule one of the following match rules:
+ * 	<ul>
+ * 		<li>{@link #R_EXACT_MATCH}</li>
+ * 		<li>{@link #R_PREFIX_MATCH}</li>
+ * 		<li>{@link #R_PATTERN_MATCH}</li>
+ * 		<li>{@link #R_CAMELCASE_MATCH}</li>
+ * 		<li>{@link #R_CAMELCASE_SAME_PART_COUNT_MATCH}</li>
+ * 	</ul>
+ * 	, which may be also combined with one of the following flags:
+ * 	<ul>
+ * 		<li>{@link #R_CASE_SENSITIVE}</li>
+ * 		<li>{@link #R_ERASURE_MATCH}</li>
+ * 		<li>{@link #R_EQUIVALENT_MATCH}</li>
+ * 	</ul>
+ *		For example,
+ *		<ul>
+ *			<li>{@link #R_EXACT_MATCH} | {@link #R_CASE_SENSITIVE}: if an exact
+ *				and case sensitive match is requested,</li>
+ *			<li>{@link #R_PREFIX_MATCH} if a case insensitive prefix match is requested</li>
+ *			<li>{@link #R_EXACT_MATCH} | {@link #R_ERASURE_MATCH}: if a case
+ *				insensitive and erasure match is requested.</li>
+ *		</ul>
+ * 	Note that {@link #R_ERASURE_MATCH} or {@link #R_EQUIVALENT_MATCH} has no effect
+ * 	on non-generic types/methods search.
+ * 	<p>
+ * 	Note also that default behavior for generic types/methods search is to find exact matches.
+ * @return a search pattern for a Java element or <code>null</code> if the given element is ill-formed
+ * @since 3.1
+ */
+public static SearchPattern createPattern(IJavaElement element, int limitTo, int matchRule) {
+	SearchPattern searchPattern = null;
+	int lastDot;
+	boolean ignoreDeclaringType = false;
+	boolean ignoreReturnType = false;
+	int maskedLimitTo = limitTo & ~(IJavaSearchConstants.IGNORE_DECLARING_TYPE+IJavaSearchConstants.IGNORE_RETURN_TYPE);
+	if (maskedLimitTo == IJavaSearchConstants.DECLARATIONS || maskedLimitTo == IJavaSearchConstants.ALL_OCCURRENCES) {
+		ignoreDeclaringType = (limitTo & IJavaSearchConstants.IGNORE_DECLARING_TYPE) != 0;
+		ignoreReturnType = (limitTo & IJavaSearchConstants.IGNORE_RETURN_TYPE) != 0;
+	}
+	if ((matchRule = validateMatchRule(null, matchRule)) == -1) {
+		return null;
+	}
+	char[] declaringSimpleName = null;
+	char[] declaringQualification = null;
+	switch (element.getElementType()) {
+		case IJavaElement.FIELD :
+			IField field = (IField) element;
+			if (!ignoreDeclaringType) {
+				IType declaringClass = field.getDeclaringType();
+				declaringSimpleName = declaringClass.getElementName().toCharArray();
+				declaringQualification = declaringClass.getPackageFragment().getElementName().toCharArray();
+				char[][] enclosingNames = enclosingTypeNames(declaringClass);
+				if (enclosingNames.length > 0) {
+					declaringQualification = CharOperation.concat(declaringQualification, CharOperation.concatWith(enclosingNames, '.'), '.');
+				}
+			}
+			char[] name = field.getElementName().toCharArray();
+			char[] typeSimpleName = null;
+			char[] typeQualification = null;
+			String typeSignature = null;
+			if (!ignoreReturnType) {
+				try {
+					typeSignature = field.getTypeSignature();
+					char[] signature = typeSignature.toCharArray();
+					char[] typeErasure = Signature.toCharArray(Signature.getTypeErasure(signature));
+					CharOperation.replace(typeErasure, '$', '.');
+					if ((lastDot = CharOperation.lastIndexOf('.', typeErasure)) == -1) {
+						typeSimpleName = typeErasure;
+					} else {
+						typeSimpleName = CharOperation.subarray(typeErasure, lastDot + 1, typeErasure.length);
+						typeQualification = CharOperation.subarray(typeErasure, 0, lastDot);
+						if (!field.isBinary()) {
+							// prefix with a '*' as the full qualification could be bigger (because of an import)
+							typeQualification = CharOperation.concat(IIndexConstants.ONE_STAR, typeQualification);
+						}
+					}
+				} catch (JavaModelException e) {
+					return null;
+				}
+			}
+			// Create field pattern
+			searchPattern =
+				new FieldPattern(
+					name,
+					declaringQualification,
+					declaringSimpleName,
+					typeQualification,
+					typeSimpleName,
+					typeSignature,
+					limitTo,
+					matchRule);
+			break;
+		case IJavaElement.IMPORT_DECLARATION :
+			String elementName = element.getElementName();
+			lastDot = elementName.lastIndexOf('.');
+			if (lastDot == -1) return null; // invalid import declaration
+			IImportDeclaration importDecl = (IImportDeclaration)element;
+			if (importDecl.isOnDemand()) {
+				searchPattern = createPackagePattern(elementName.substring(0, lastDot), maskedLimitTo, matchRule);
+			} else {
+				searchPattern =
+					createTypePattern(
+						elementName.substring(lastDot+1).toCharArray(),
+						elementName.substring(0, lastDot).toCharArray(),
+						null,
+						null,
+						null,
+						maskedLimitTo,
+						matchRule);
+			}
+			break;
+		case IJavaElement.LOCAL_VARIABLE :
+			LocalVariable localVar = (LocalVariable) element;
+			searchPattern = new LocalVariablePattern(localVar, limitTo, matchRule);
+			break;
+		case IJavaElement.TYPE_PARAMETER:
+			ITypeParameter typeParam = (ITypeParameter) element;
+			boolean findParamDeclarations = true;
+			boolean findParamReferences = true;
+			switch (maskedLimitTo) {
+				case IJavaSearchConstants.DECLARATIONS :
+					findParamReferences = false;
+					break;
+				case IJavaSearchConstants.REFERENCES :
+					findParamDeclarations = false;
+					break;
+			}
+			searchPattern =
+				new TypeParameterPattern(
+					findParamDeclarations,
+					findParamReferences,
+					typeParam,
+					matchRule);
+			break;
+		case IJavaElement.METHOD :
+			IMethod method = (IMethod) element;
+			boolean isConstructor;
+			try {
+				isConstructor = method.isConstructor();
+			} catch (JavaModelException e) {
+				return null;
+			}
+			IType declaringClass = method.getDeclaringType();
+			if (ignoreDeclaringType) {
+				if (isConstructor) declaringSimpleName = declaringClass.getElementName().toCharArray();
+			} else {
+				declaringSimpleName = declaringClass.getElementName().toCharArray();
+				declaringQualification = declaringClass.getPackageFragment().getElementName().toCharArray();
+				char[][] enclosingNames = enclosingTypeNames(declaringClass);
+				if (enclosingNames.length > 0) {
+					declaringQualification = CharOperation.concat(declaringQualification, CharOperation.concatWith(enclosingNames, '.'), '.');
+				}
+			}
+			char[] selector = method.getElementName().toCharArray();
+			char[] returnSimpleName = null;
+			char[] returnQualification = null;
+			String returnSignature = null;
+			if (!ignoreReturnType) {
+				try {
+					returnSignature = method.getReturnType();
+					char[] signature = returnSignature.toCharArray();
+					char[] returnErasure = Signature.toCharArray(Signature.getTypeErasure(signature));
+					CharOperation.replace(returnErasure, '$', '.');
+					if ((lastDot = CharOperation.lastIndexOf('.', returnErasure)) == -1) {
+						returnSimpleName = returnErasure;
+					} else {
+						returnSimpleName = CharOperation.subarray(returnErasure, lastDot + 1, returnErasure.length);
+						returnQualification = CharOperation.subarray(returnErasure, 0, lastDot);
+						if (!method.isBinary()) {
+							// prefix with a '*' as the full qualification could be bigger (because of an import)
+							CharOperation.concat(IIndexConstants.ONE_STAR, returnQualification);
+						}
+					}
+				} catch (JavaModelException e) {
+					return null;
+				}
+			}
+			String[] parameterTypes = method.getParameterTypes();
+			int paramCount = parameterTypes.length;
+			char[][] parameterSimpleNames = new char[paramCount][];
+			char[][] parameterQualifications = new char[paramCount][];
+			String[] parameterSignatures = new String[paramCount];
+			for (int i = 0; i < paramCount; i++) {
+				parameterSignatures[i] = parameterTypes[i];
+				char[] signature = parameterSignatures[i].toCharArray();
+				char[] paramErasure = Signature.toCharArray(Signature.getTypeErasure(signature));
+				CharOperation.replace(paramErasure, '$', '.');
+				if ((lastDot = CharOperation.lastIndexOf('.', paramErasure)) == -1) {
+					parameterSimpleNames[i] = paramErasure;
+					parameterQualifications[i] = null;
+				} else {
+					parameterSimpleNames[i] = CharOperation.subarray(paramErasure, lastDot + 1, paramErasure.length);
+					parameterQualifications[i] = CharOperation.subarray(paramErasure, 0, lastDot);
+					if (!method.isBinary()) {
+						// prefix with a '*' as the full qualification could be bigger (because of an import)
+						CharOperation.concat(IIndexConstants.ONE_STAR, parameterQualifications[i]);
+					}
+				}
+			}
+
+			// Create method/constructor pattern
+			if (isConstructor) {
+				searchPattern =
+					new ConstructorPattern(
+						declaringSimpleName,
+						declaringQualification,
+						parameterQualifications,
+						parameterSimpleNames,
+						parameterSignatures,
+						method,
+						limitTo,
+						matchRule);
+			} else {
+				searchPattern =
+					new MethodPattern(
+						selector,
+						declaringQualification,
+						declaringSimpleName,
+						returnQualification,
+						returnSimpleName,
+						returnSignature,
+						parameterQualifications,
+						parameterSimpleNames,
+						parameterSignatures,
+						method,
+						limitTo,
+						matchRule);
+			}
+			break;
+		case IJavaElement.TYPE :
+			IType type = (IType)element;
+			searchPattern = 	createTypePattern(
+						type.getElementName().toCharArray(),
+						type.getPackageFragment().getElementName().toCharArray(),
+						ignoreDeclaringType ? null : enclosingTypeNames(type),
+						null,
+						type,
+						maskedLimitTo,
+						matchRule);
+			break;
+		case IJavaElement.PACKAGE_DECLARATION :
+		case IJavaElement.PACKAGE_FRAGMENT :
+			searchPattern = createPackagePattern(element.getElementName(), maskedLimitTo, matchRule);
+			break;
+	}
+	if (searchPattern != null)
+		MatchLocator.setFocus(searchPattern, element);
+	return searchPattern;
+}
+
+private static SearchPattern createTypePattern(char[] simpleName, char[] packageName, char[][] enclosingTypeNames, String typeSignature, IType type, int limitTo, int matchRule) {
+	switch (limitTo) {
+		case IJavaSearchConstants.DECLARATIONS :
+			return new TypeDeclarationPattern(
+				packageName,
+				enclosingTypeNames,
+				simpleName,
+				IIndexConstants.TYPE_SUFFIX,
+				matchRule);
+		case IJavaSearchConstants.REFERENCES :
+			if (type != null) {
+				return new TypeReferencePattern(
+					CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+					simpleName,
+					type,
+					matchRule);
+			}
+			return new TypeReferencePattern(
+				CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+				simpleName,
+				typeSignature,
+				matchRule);
+		case IJavaSearchConstants.IMPLEMENTORS :
+			return new SuperTypeReferencePattern(
+				CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+				simpleName,
+				SuperTypeReferencePattern.ONLY_SUPER_INTERFACES,
+				matchRule);
+		case IJavaSearchConstants.ALL_OCCURRENCES :
+			return new OrPattern(
+				new TypeDeclarationPattern(
+					packageName,
+					enclosingTypeNames,
+					simpleName,
+					IIndexConstants.TYPE_SUFFIX,
+					matchRule),
+				(type != null)
+					? new TypeReferencePattern(
+						CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+						simpleName,
+						type,
+						matchRule)
+					: new TypeReferencePattern(
+						CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+						simpleName,
+						typeSignature,
+						matchRule)
+			);
+		default:
+			if (type != null) {
+				return new TypeReferencePattern(
+					CharOperation.concatWith(packageName, enclosingTypeNames, '.'),
+					simpleName,
+					type,
+					limitTo,
+					matchRule);
+			}
+	}
+	return null;
+}
+
+private static SearchPattern createTypePattern(String patternString, int limitTo, int matchRule, char indexSuffix) {
+>>>>>>> patch
 	// use 1.7 as the source level as there are more valid tokens in 1.7 mode
 	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=376673
 	Scanner scanner = new Scanner(false /*comment*/, true /*whitespace*/, false /*nls*/, ClassFileConstants.JDK1_7/*sourceLevel*/, null /*taskTags*/, null/*taskPriorities*/, true/*taskCaseSensitive*/);
@@ -2511,9 +3758,9 @@ public static int validateMatchRule(String stringPattern, int matchRule) {
 
 	// Verify Regexp match rule
 	if ((matchRule & R_REGEXP_MATCH) != 0) {
-		// regexp is not supported yet
-		return -1;
-	}
+			// regexp is not supported yet
+			return -1;
+		}
 
 	// Verify Pattern match rule
 	if (stringPattern != null) {

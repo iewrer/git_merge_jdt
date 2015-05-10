@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -16,6 +17,26 @@ import java.util.Map;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jdt.core.CompletionRequestor;
 import org.eclipse.jdt.core.IJavaProject;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2012 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.eval;
+
+import java.util.Locale;
+import java.util.Map;
+
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.CompletionRequestor;
+import org.eclipse.jdt.core.IJavaProject;
+>>>>>>> patch
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.WorkingCopyOwner;
 import org.eclipse.jdt.core.compiler.*;
@@ -30,6 +51,7 @@ import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+<<<<<<< HEAD
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
@@ -131,6 +153,108 @@ public void complete(
 		// Do nothing
 	}
 	final char[] className = "CodeSnippetCompletion".toCharArray(); //$NON-NLS-1$
+=======
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.SearchableEnvironment;
+import org.eclipse.jdt.internal.core.util.Util;
+
+/**
+ * @see org.eclipse.jdt.core.eval.IEvaluationContext
+ */
+public class EvaluationContext implements EvaluationConstants, SuffixConstants {
+	/**
+	 * Global counters so that several evaluation context can deploy on the same runtime.
+	 */
+	static int VAR_CLASS_COUNTER = 0;
+	static int CODE_SNIPPET_COUNTER = 0;
+
+	GlobalVariable[] variables;
+	int variableCount;
+	char[][] imports;
+	char[] packageName;
+	boolean varsChanged;
+	VariablesInfo installedVars;
+	IBinaryType codeSnippetBinary;
+	String lineSeparator;
+
+	/* do names implicitly refer to a given type */
+	char[] declaringTypeName;
+	int[] localVariableModifiers;
+	char[][] localVariableTypeNames;
+	char[][] localVariableNames;
+
+	/* can 'this' be used in this context */
+	boolean isStatic;
+	boolean isConstructorCall;
+/**
+ * Creates a new evaluation context.
+ */
+public EvaluationContext() {
+	this.variables = new GlobalVariable[5];
+	this.variableCount = 0;
+	this.imports = CharOperation.NO_CHAR_CHAR;
+	this.packageName = CharOperation.NO_CHAR;
+	this.varsChanged = true;
+	this.isStatic = true;
+	this.isConstructorCall = false;
+	this.lineSeparator = org.eclipse.jdt.internal.compiler.util.Util.LINE_SEPARATOR; // default value
+}
+/**
+ * Returns the global variables of this evaluation context in the order they were created in.
+ */
+public GlobalVariable[] allVariables() {
+	GlobalVariable[] result = new GlobalVariable[this.variableCount];
+	System.arraycopy(this.variables, 0, result, 0, this.variableCount);
+	return result;
+}
+/**
+ * Computes a completion at the specified position of the given code snippet.
+ * (Note that this evaluation context's VM doesn't need to be running.)
+ *
+ *  @param environment
+ *      used to resolve type/package references and search for types/packages
+ *      based on partial names.
+ *
+ *  @param requestor
+ *      since the engine might produce answers of various forms, the engine
+ *      is associated with a requestor able to accept all possible completions.
+ *
+ *  @param options
+ *		set of options used to configure the code assist engine.
+ *
+ *  @param owner
+ *  	the owner of working copies that take precedence over their original compilation units
+ *  
+ *  @param monitor
+ *  	the progress monitor used to report progress
+ */
+public void complete(
+		char[] codeSnippet,
+		int completionPosition,
+		SearchableEnvironment environment,
+		CompletionRequestor requestor,
+		Map options,
+		final IJavaProject project,
+		WorkingCopyOwner owner,
+		IProgressMonitor monitor) {
+	try {
+		IRequestor variableRequestor = new IRequestor() {
+			public boolean acceptClassFiles(ClassFile[] classFiles, char[] codeSnippetClassName) {
+				// Do nothing
+				return true;
+			}
+			public void acceptProblem(CategorizedProblem problem, char[] fragmentSource, int fragmentKind) {
+				// Do nothing
+			}
+		};
+		evaluateVariables(environment, options, variableRequestor, new DefaultProblemFactory(Locale.getDefault()));
+	} catch (InstallException e) {
+		// Do nothing
+	}
+	final char[] className = "CodeSnippetCompletion".toCharArray(); //$NON-NLS-1$
+>>>>>>> patch
 	final long complianceVersion = CompilerOptions.versionToJdkLevel(options.get(JavaCore.COMPILER_COMPLIANCE));
 	final CodeSnippetToCuMapper mapper = new CodeSnippetToCuMapper(
 		codeSnippet,

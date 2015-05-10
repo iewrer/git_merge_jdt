@@ -21,11 +21,14 @@
  *								bug 391376 - [1.8] check interaction of default methods with bridge methods and generics
  *								bug 395681 - [compiler] Improve simulation of javac6 behavior from bug 317719 after fixing bug 388795
  *								bug 409473 - [compiler] JDT cannot compile against JRE 1.8
+<<<<<<< HEAD
  *								Bug 420080 - [1.8] Overridden Default method is reported as duplicated
  *								Bug 404690 - [1.8][compiler] revisit bridge generation after VM bug is fixed
  *								Bug 410325 - [1.7][compiler] Generified method override different between javac and eclipse compiler
  *								Bug 429958 - [1.8][null] evaluate new DefaultLocation attribute of @NonNullByDefault
  *								Bug 390889 - [1.8][compiler] Evaluate options to support 1.7- projects against 1.8 JRE.
+=======
+>>>>>>> patch
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
@@ -271,6 +274,7 @@ void checkInheritedMethods(MethodBinding[] methods, int length, boolean[] isOver
 	MethodBinding abstractSuperClassMethod = null;
 	boolean playingTrump = false; // invariant: playingTrump => (concreteMethod == null)
 	for (int i = 0; i < length; i++) {
+<<<<<<< HEAD
 		if (!methods[i].declaringClass.isInterface()
 				&& TypeBinding.notEquals(methods[i].declaringClass, this.type)
 				&& methods[i].isAbstract())
@@ -321,6 +325,14 @@ void checkInheritedMethods(MethodBinding[] methods, int length, boolean[] isOver
 					continueInvestigation = false;
 				}
 				concreteMethod = methods[i];
+=======
+		// when unexpectedly seeing a non-abstract interface method regard it as abstract, too, for this check:
+		boolean isAbstract = methods[i].isAbstract() || methods[i].declaringClass.isInterface();
+		if (!isAbstract) {
+			if (concreteMethod != null) {
+				problemReporter().duplicateInheritedMethods(this.type, concreteMethod, methods[i]);
+				continueInvestigation = false;
+>>>>>>> patch
 			}
 		}
 	}
@@ -688,8 +700,6 @@ void checkMethods() {
  * mark as isOverridden
  * - any skippable method as defined above iff it is actually overridden by the specific method (disregarding visibility etc.)
  * Note, that 'idx' corresponds to the position of 'general' in the arrays 'skip' and 'isOverridden'
- * TODO(stephan) currently (as of Bug 410325), the boarder between skip and isOverridden is blurred,
- *                should reassess after more experience with this patch.
  */
 boolean isSkippableOrOverridden(MethodBinding specific, MethodBinding general, boolean[] skip, boolean[] isOverridden, boolean[] isInherited, int idx) {
 	boolean specificIsInterface = specific.declaringClass.isInterface();
@@ -705,9 +715,13 @@ boolean isSkippableOrOverridden(MethodBinding specific, MethodBinding general, b
 			return true;
 		}
 	} else if (specificIsInterface == generalIsInterface) { 
+<<<<<<< HEAD
 		if (specific.declaringClass.isCompatibleWith(general.declaringClass) && isMethodSubsignature(specific, general)) {
+=======
+		if (isParameterSubsignature(specific, general)) {
+>>>>>>> patch
 			skip[idx] = true;
-			isOverridden[idx] = true;
+			isOverridden[idx] = specific.declaringClass.isCompatibleWith(general.declaringClass);
 			return true;
 		}
 	}

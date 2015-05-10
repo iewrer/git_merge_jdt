@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -131,6 +132,140 @@ public class ModelUpdater {
 			case IJavaElement.JAVA_PROJECT :
 				JavaModelManager manager = JavaModelManager.getJavaModelManager();
 				JavaProject javaProject = (JavaProject) element;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+
+package org.eclipse.jdt.internal.core;
+
+import java.util.HashSet;
+import java.util.Iterator;
+
+import org.eclipse.jdt.core.*;
+
+/**
+ * This class is used by <code>JavaModelManager</code> to update the JavaModel
+ * based on some <code>IJavaElementDelta</code>s.
+ */
+public class ModelUpdater {
+
+	HashSet projectsToUpdate = new HashSet();
+
+	/**
+	 * Adds the given child handle to its parent's cache of children.
+	 */
+	protected void addToParentInfo(Openable child) {
+
+		Openable parent = (Openable) child.getParent();
+		if (parent != null && parent.isOpen()) {
+			try {
+				OpenableElementInfo info = (OpenableElementInfo) parent.getElementInfo();
+				info.addChild(child);
+			} catch (JavaModelException e) {
+				// do nothing - we already checked if open
+			}
+		}
+	}
+
+	/**
+	 * Closes the given element, which removes it from the cache of open elements.
+	 */
+	protected static void close(Openable element) {
+
+		try {
+			element.close();
+		} catch (JavaModelException e) {
+			// do nothing
+		}
+	}
+
+	/**
+	 * Processing for an element that has been added:<ul>
+	 * <li>If the element is a project, do nothing, and do not process
+	 * children, as when a project is created it does not yet have any
+	 * natures - specifically a java nature.
+	 * <li>If the elemet is not a project, process it as added (see
+	 * <code>basicElementAdded</code>.
+	 * </ul>
+	 */
+	protected void elementAdded(Openable element) {
+
+		int elementType = element.getElementType();
+		if (elementType == IJavaElement.JAVA_PROJECT) {
+			// project add is handled by JavaProject.configure() because
+			// when a project is created, it does not yet have a java nature
+			addToParentInfo(element);
+			this.projectsToUpdate.add(element);
+		} else {
+			addToParentInfo(element);
+
+			// Force the element to be closed as it might have been opened
+			// before the resource modification came in and it might have a new child
+			// For example, in an IWorkspaceRunnable:
+			// 1. create a package fragment p using a java model operation
+			// 2. open package p
+			// 3. add file X.java in folder p
+			// When the resource delta comes in, only the addition of p is notified,
+			// but the package p is already opened, thus its children are not recomputed
+			// and it appears empty.
+			close(element);
+		}
+
+		switch (elementType) {
+			case IJavaElement.PACKAGE_FRAGMENT_ROOT :
+				// when a root is added, and is on the classpath, the project must be updated
+				this.projectsToUpdate.add(element.getJavaProject());
+				break;
+			case IJavaElement.PACKAGE_FRAGMENT :
+				// get rid of package fragment cache
+				JavaProject project = (JavaProject) element.getJavaProject();
+				project.resetCaches();
+				break;
+		}
+	}
+
+	/**
+	 * Generic processing for elements with changed contents:<ul>
+	 * <li>The element is closed such that any subsequent accesses will re-open
+	 * the element reflecting its new structure.
+	 * </ul>
+	 */
+	protected void elementChanged(Openable element) {
+
+		close(element);
+	}
+
+	/**
+	 * Generic processing for a removed element:<ul>
+	 * <li>Close the element, removing its structure from the cache
+	 * <li>Remove the element from its parent's cache of children
+	 * <li>Add a REMOVED entry in the delta
+	 * </ul>
+	 */
+	protected void elementRemoved(Openable element) {
+
+		if (element.isOpen()) {
+			close(element);
+		}
+		removeFromParentInfo(element);
+		int elementType = element.getElementType();
+
+		switch (elementType) {
+			case IJavaElement.JAVA_MODEL :
+				JavaModelManager.getIndexManager().reset();
+				break;
+			case IJavaElement.JAVA_PROJECT :
+				JavaModelManager manager = JavaModelManager.getJavaModelManager();
+				JavaProject javaProject = (JavaProject) element;
+>>>>>>> patch
 				manager.removePerProjectInfo(javaProject, true /* remove external jar files indexes and timestamps*/);
 				manager.containerRemove(javaProject);
 				break;

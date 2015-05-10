@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -54,6 +55,65 @@ public class IndexManager extends JobManager implements IIndexConstants {
 	/* can only replace a current state if its less than the new one */
 	// key = indexLocation path, value = index state integer
 	private SimpleLookupTable indexStates = null;
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2013 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.search.indexing;
+// GROOVY PATCHED
+
+import java.io.*;
+import java.net.URL;
+import java.util.*;
+import java.util.zip.CRC32;
+
+import org.codehaus.jdt.groovy.integration.LanguageSupportFactory;
+import org.eclipse.core.resources.*;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.OperationCanceledException;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.search.*;
+import org.eclipse.jdt.internal.compiler.ISourceElementRequestor;
+import org.eclipse.jdt.internal.compiler.SourceElementParser;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
+import org.eclipse.jdt.internal.compiler.util.SimpleSet;
+import org.eclipse.jdt.internal.core.*;
+import org.eclipse.jdt.internal.core.index.*;
+import org.eclipse.jdt.internal.core.search.BasicSearchEngine;
+import org.eclipse.jdt.internal.core.search.PatternSearchJob;
+import org.eclipse.jdt.internal.core.search.processing.IJob;
+import org.eclipse.jdt.internal.core.search.processing.JobManager;
+import org.eclipse.jdt.internal.core.util.Messages;
+import org.eclipse.jdt.internal.core.util.Util;
+
+public class IndexManager extends JobManager implements IIndexConstants {
+
+	// key = containerPath, value = indexLocation path
+	// indexLocation path is created by appending an index file name to the getJavaPluginWorkingLocation() path
+	public SimpleLookupTable indexLocations = new SimpleLookupTable();
+	// key = indexLocation path, value = an index
+	private SimpleLookupTable indexes = new SimpleLookupTable();
+
+	/* need to save ? */
+	private boolean needToSave = false;
+	private IPath javaPluginLocation = null;
+
+	/* can only replace a current state if its less than the new one */
+	// key = indexLocation path, value = index state integer
+	private SimpleLookupTable indexStates = null;
+>>>>>>> patch
 	private File indexNamesMapFile = new File(getSavedIndexesDirectory(), "indexNamesMap.txt"); //$NON-NLS-1$
 	private File savedIndexNamesFile = new File(getSavedIndexesDirectory(), "savedIndexNames.txt"); //$NON-NLS-1$
 	private File participantIndexNamesFile = new File(getSavedIndexesDirectory(), "participantsIndexNames.txt"); //$NON-NLS-1$
@@ -75,8 +135,7 @@ public class IndexManager extends JobManager implements IIndexConstants {
 	// Debug
 	public static boolean DEBUG = false;
 
-
-public synchronized void aboutToUpdateIndex(IPath containerPath, Integer newIndexState) {
+	public synchronized void aboutToUpdateIndex(IPath containerPath, Integer newIndexState) {
 	// newIndexState is either UPDATING_STATE or REBUILDING_STATE
 	// must tag the index as inconsistent, in case we exit before the update job is started
 	IndexLocation indexLocation = computeIndexLocation(containerPath);
@@ -226,13 +285,25 @@ public SourceElementParser getSourceElementParser(IJavaProject project, ISourceE
 	Map options = project.getOptions(true);
 	options.put(JavaCore.COMPILER_TASK_TAGS, ""); //$NON-NLS-1$
 
-	SourceElementParser parser = new IndexingParser(
-		requestor,
-		new DefaultProblemFactory(Locale.getDefault()),
-		new CompilerOptions(options),
-		true, // index local declarations
-		true, // optimize string literals
-		false); // do not use source javadoc parser to speed up parsing
+    // GROOVY start
+    /* old {
+		SourceElementParser parser = new IndexingParser(
+				requestor,
+				new DefaultProblemFactory(Locale.getDefault()),
+				new CompilerOptions(options),
+				true, // index local declarations
+				true, // optimize string literals
+				false); // do not use source javadoc parser to speed up parsing
+    } new */
+	SourceElementParser parser = LanguageSupportFactory.getIndexingParser(
+			requestor,
+			new DefaultProblemFactory(Locale.getDefault()),
+			new CompilerOptions(options),
+			true, // index local declarations
+			true, // optimize string literals
+			false); // do not use source javadoc parser to speed up parsing
+	// GROOVY end
+	
 	parser.reportOnlyOneSyntaxError = true;
 
 	// Always check javadoc while indexing
@@ -319,7 +390,7 @@ public synchronized Index getIndex(IPath containerPath, IndexLocation indexLocat
 					rebuildIndex(indexLocation, containerPath, true);
 				}
 				return null;
-			}
+		}
 		}
 		// index wasn't found on disk, consider creating an empty new one
 		if (createIfMissing) {
@@ -383,18 +454,18 @@ public Index[] getIndexes(IndexLocation[] locations, IProgressMonitor progressMo
 				}
 			} else {
 				if (indexLocation.isParticipantIndex() && indexLocation.exists()) { // the index belongs to non-jdt search participant
-					try {
-						IPath container = getParticipantsContainer(indexLocation);
-						if (container != null) {
+						try {
+							IPath container = getParticipantsContainer(indexLocation);
+							if (container != null) {
 							index = new Index(indexLocation, container.toOSString(), true /*reuse index file*/);
-							this.indexes.put(indexLocation, index);
+								this.indexes.put(indexLocation, index);
+							}
+						} catch (IOException e) {
+							// ignore
 						}
-					} catch (IOException e) {
-						// ignore
-					}
+					} 
 				}
 			}
-		}
 		if (index != null)
 			locatedIndexes[count++] = index; // only consider indexes which are ready
 	}
@@ -441,6 +512,7 @@ private SimpleLookupTable getIndexStates() {
 	return this.indexStates;
 }
 private IPath getParticipantsContainer(IndexLocation indexLocation) {
+<<<<<<< HEAD
 	if (this.participantsContainers == null) {
 		readParticipantsIndexNamesFile();
 	}
@@ -539,6 +611,92 @@ public void indexAll(IProject project) {
 		for (int i = 0; i < entries.length; i++) {
 			IClasspathEntry entry= entries[i];
 			if (entry.getEntryKind() == IClasspathEntry.CPE_LIBRARY)
+=======
+	if (this.participantsContainers == null) {
+		readParticipantsIndexNamesFile();
+	}
+	return (IPath)this.participantsContainers.get(indexLocation);
+}
+private IPath getJavaPluginWorkingLocation() {
+	if (this.javaPluginLocation != null) return this.javaPluginLocation;
+
+	IPath stateLocation = JavaCore.getPlugin().getStateLocation();
+	return this.javaPluginLocation = stateLocation;
+}
+private File getSavedIndexesDirectory() {
+	return new File(getJavaPluginWorkingLocation().toOSString());
+}
+/*
+ * see https://bugs.eclipse.org/bugs/show_bug.cgi?id=286379
+ * Returns true if there is a change in javaLikeNames since it
+ * has been last stored. 
+ * The javaLikeNames stored in the file javaLikeNames.txt 
+ * is compared with the current javaLikeNames and if there is a change, this 
+ * function returns true. If the file javaLikeNames.txt doesn't exist and there 
+ * is only one javaLikeName (.java), then this returns false so that no-reindexing 
+ * happens. 
+ */
+private boolean hasJavaLikeNamesChanged() {
+	char[][] currentNames = Util.getJavaLikeExtensions();
+	int current = currentNames.length;
+	char[][] prevNames = readJavaLikeNamesFile();
+	if (prevNames == null) {
+		if (VERBOSE && current != 1)
+			Util.verbose("No Java like names found and there is atleast one non-default javaLikeName", System.err); //$NON-NLS-1$
+		return (current != 1); //Ignore if only java
+	}
+	int prev = prevNames.length;
+	if (current != prev) {
+		if (VERBOSE)
+			Util.verbose("Java like names have changed", System.err); //$NON-NLS-1$
+		return true;
+	}
+	if (current > 1) {
+		// Sort the current java like names. 
+		// Copy the array to avoid modifying the Util static variable
+		System.arraycopy(currentNames, 0, currentNames = new char[current][], 0, current);
+		Util.sort(currentNames);
+	}
+	
+	// The JavaLikeNames would have been sorted before getting stored in the file,
+	// hence just do a direct compare.
+	for (int i = 0; i < current; i++) {
+		if (!CharOperation.equals(currentNames[i],prevNames[i])) {
+			if (VERBOSE)
+				Util.verbose("Java like names have changed", System.err); //$NON-NLS-1$
+			return true;
+		}
+	}
+	return false;
+}
+public void indexDocument(SearchDocument searchDocument, SearchParticipant searchParticipant, Index index, IPath indexLocation) {
+	try {
+		searchDocument.setIndex(index);
+		searchParticipant.indexDocument(searchDocument, indexLocation);
+	} finally {
+		searchDocument.setIndex(null);
+	}
+}
+/**
+ * Trigger addition of the entire content of a project
+ * Note: the actual operation is performed in background
+ */
+public void indexAll(IProject project) {
+	if (JavaCore.getPlugin() == null) return;
+
+	// Also request indexing of binaries on the classpath
+	// determine the new children
+	try {
+		JavaModel model = JavaModelManager.getJavaModelManager().getJavaModel();
+		JavaProject javaProject = (JavaProject) model.getJavaProject(project);
+		// only consider immediate libraries - each project will do the same
+		// NOTE: force to resolve CP variables before calling indexer - 19303, so that initializers
+		// will be run in the current thread.
+		IClasspathEntry[] entries = javaProject.getResolvedClasspath();
+		for (int i = 0; i < entries.length; i++) {
+			IClasspathEntry entry= entries[i];
+			if (entry.getEntryKind() == IClasspathEntry.CPE_LIBRARY)
+>>>>>>> patch
 				indexLibrary(entry.getPath(), project, ((ClasspathEntry)entry).getLibraryIndexLocation());
 		}
 	} catch(JavaModelException e){ // cannot retrieve classpath info
@@ -577,8 +735,14 @@ public void indexLibrary(IPath path, IProject requestingProject, URL indexURL, f
 	}
 	if (JavaCore.getPlugin() == null) return;
 	IndexRequest request = null;
+<<<<<<< HEAD
 	Object target = JavaModel.getTarget(path, true);
 	if (target instanceof IFile) {
+=======
+	boolean forceIndexUpdate = IS_MANAGING_PRODUCT_INDEXES_PROPERTY && updateIndex;
+	Object target = JavaModel.getTarget(path, true);
+	if (target instanceof IFile) {
+>>>>>>> patch
 		request = new AddJarFileToIndex((IFile) target, indexFile, this, forceIndexUpdate);
 	} else if (target instanceof File) {
 		request = new AddJarFileToIndex(path, indexFile, this, forceIndexUpdate);
@@ -667,6 +831,7 @@ private char[][] readJavaLikeNamesFile() {
 	return null;
 }
 private void rebuildIndex(IndexLocation indexLocation, IPath containerPath) {
+<<<<<<< HEAD
 	rebuildIndex(indexLocation, containerPath, false);
 }
 private void rebuildIndex(IndexLocation indexLocation, IPath containerPath, final boolean updateIndex) {
@@ -702,6 +867,40 @@ public synchronized Index recreateIndex(IPath containerPath) {
 	String containerPathString = containerPath.getDevice() == null ? containerPath.toString() : containerPath.toOSString();
 	try {
 		// Path is already canonical
+=======
+	Object target = JavaModel.getTarget(containerPath, true);
+	if (target == null) return;
+
+	if (VERBOSE)
+		Util.verbose("-> request to rebuild index: "+indexLocation+" path: "+containerPath); //$NON-NLS-1$ //$NON-NLS-2$
+
+	updateIndexState(indexLocation, REBUILDING_STATE);
+	IndexRequest request = null;
+	if (target instanceof IProject) {
+		IProject p = (IProject) target;
+		if (JavaProject.hasJavaNature(p))
+			request = new IndexAllProject(p, this);
+	} else if (target instanceof IFolder) {
+		request = new IndexBinaryFolder((IFolder) target, this);
+	} else if (target instanceof IFile) {
+		request = new AddJarFileToIndex((IFile) target, null, this);
+	} else if (target instanceof File) {
+		request = new AddJarFileToIndex(containerPath, null, this);
+	}
+	if (request != null)
+		request(request);
+}
+/**
+ * Recreates the index for a given path, keeping the same read-write monitor.
+ * Returns the new empty index or null if it didn't exist before.
+ * Warning: Does not check whether index is consistent (not being used)
+ */
+public synchronized Index recreateIndex(IPath containerPath) {
+	// only called to over write an existing cached index...
+	String containerPathString = containerPath.getDevice() == null ? containerPath.toString() : containerPath.toOSString();
+	try {
+		// Path is already canonical
+>>>>>>> patch
 		IndexLocation indexLocation = computeIndexLocation(containerPath);
 		Index index = getIndex(indexLocation);
 		ReadWriteMonitor monitor = index == null ? null : index.monitor;
@@ -861,6 +1060,7 @@ public synchronized boolean resetIndex(IPath containerPath) {
 	try {
 		// Path is already canonical
 		IndexLocation indexLocation = computeIndexLocation(containerPath);
+<<<<<<< HEAD
 		Index index = getIndex(indexLocation);
 		if (VERBOSE) {
 			Util.verbose("-> reseting index: "+indexLocation+" for path: "+containerPathString); //$NON-NLS-1$ //$NON-NLS-2$
@@ -901,6 +1101,31 @@ public void saveIndex(Index index) throws IOException {
 	// must have permission to write from the write monitor
 	if (index.hasChanged()) {
 		if (VERBOSE)
+=======
+		Index index = getIndex(indexLocation);
+		if (VERBOSE) {
+			Util.verbose("-> reseting index: "+indexLocation+" for path: "+containerPathString); //$NON-NLS-1$ //$NON-NLS-2$
+		}
+		if (index == null) {
+			// the index does not exist, try to recreate it
+			return recreateIndex(containerPath) != null;
+		}
+		index.reset();
+		return true;
+	} catch (IOException e) {
+		// The file could not be created. Possible reason: the project has been deleted.
+		if (VERBOSE) {
+			Util.verbose("-> failed to reset index for path: "+containerPathString); //$NON-NLS-1$
+			e.printStackTrace();
+		}
+		return false;
+	}
+}
+public void saveIndex(Index index) throws IOException {
+	// must have permission to write from the write monitor
+	if (index.hasChanged()) {
+		if (VERBOSE)
+>>>>>>> patch
 			Util.verbose("-> saving index " + index.getIndexLocation()); //$NON-NLS-1$
 		index.save();
 	}
@@ -969,6 +1194,7 @@ public void saveIndexes() {
 	this.needToSave = !allSaved;
 }
 public void scheduleDocumentIndexing(final SearchDocument searchDocument, IPath container, final IndexLocation indexLocation, final SearchParticipant searchParticipant) {
+<<<<<<< HEAD
 	request(new IndexRequest(container, this) {
 		public boolean execute(IProgressMonitor progressMonitor) {
 			if (this.isCancelled || progressMonitor != null && progressMonitor.isCanceled()) return true;
@@ -1010,6 +1236,46 @@ public String toString() {
 	return buffer.toString();
 }
 
+=======
+	request(new IndexRequest(container, this) {
+		public boolean execute(IProgressMonitor progressMonitor) {
+			if (this.isCancelled || progressMonitor != null && progressMonitor.isCanceled()) return true;
+
+			/* ensure no concurrent write access to index */
+			Index index = getIndex(this.containerPath, indexLocation, true, /*reuse index file*/ true /*create if none*/);
+			if (index == null) return true;
+			ReadWriteMonitor monitor = index.monitor;
+			if (monitor == null) return true; // index got deleted since acquired
+
+			try {
+				monitor.enterWrite(); // ask permission to write
+				indexDocument(searchDocument, searchParticipant, index, new Path(indexLocation.getCanonicalFilePath()));
+			} finally {
+				monitor.exitWrite(); // free write lock
+			}
+			return true;
+		}
+		public String toString() {
+			return "indexing " + searchDocument.getPath(); //$NON-NLS-1$
+		}
+	});
+}
+
+public String toString() {
+	StringBuffer buffer = new StringBuffer(10);
+	buffer.append(super.toString());
+	buffer.append("In-memory indexes:\n"); //$NON-NLS-1$
+	int count = 0;
+	Object[] valueTable = this.indexes.valueTable;
+	for (int i = 0, l = valueTable.length; i < l; i++) {
+		Index index = (Index) valueTable[i];
+		if (index != null)
+			buffer.append(++count).append(" - ").append(index.toString()).append('\n'); //$NON-NLS-1$
+	}
+	return buffer.toString();
+}
+
+>>>>>>> patch
 private void readIndexMap() {
 	try {
 		char[] indexMaps = org.eclipse.jdt.internal.compiler.util.Util.getFileCharContent(this.indexNamesMapFile, null);
@@ -1124,7 +1390,7 @@ private synchronized void updateIndexState(IndexLocation indexLocation, Integer 
 public void updateParticipant(IPath indexPath, IPath containerPath) {
 	if (this.participantsContainers == null) {
 		readParticipantsIndexNamesFile();
-	}
+	} 
 	IndexLocation indexLocation = new FileIndexLocation(indexPath.toFile(), true);
 	if (this.participantsContainers.get(indexLocation) == null) {
 		this.participantsContainers.put(indexLocation, containerPath);

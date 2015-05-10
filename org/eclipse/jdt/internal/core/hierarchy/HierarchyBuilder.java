@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*******************************************************************************
  * Copyright (c) 2000, 2013 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
@@ -168,9 +169,191 @@ public abstract class HierarchyBuilder {
 				break;
 			case TypeDeclaration.INTERFACE_DECL :
 			case TypeDeclaration.ANNOTATION_TYPE_DECL :
+=======
+/*******************************************************************************
+ * Copyright (c) 2000, 2011 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
+package org.eclipse.jdt.internal.core.hierarchy;
+// GROOVY PATCHED
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.OperationCanceledException;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.util.CompilerUtils;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.env.IBinaryType;
+import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
+import org.eclipse.jdt.internal.compiler.env.IGenericType;
+import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.core.*;
+import org.eclipse.jdt.internal.core.util.ResourceCompilationUnit;
+import org.eclipse.jdt.internal.core.util.Util;
+
+public abstract class HierarchyBuilder {
+	/**
+	 * The hierarchy being built.
+	 */
+	protected TypeHierarchy hierarchy;
+	/**
+	 * @see NameLookup
+	 */
+	protected NameLookup nameLookup;
+	/**
+	 * The resolver used to resolve type hierarchies
+	 * @see HierarchyResolver
+	 */
+	protected HierarchyResolver hierarchyResolver;
+	/**
+	 * A temporary cache of infos to handles to speed info
+	 * to handle translation - it only contains the entries
+	 * for the types in the region (in other words, it contains
+	 * no supertypes outside the region).
+	 */
+	protected Map infoToHandle;
+	/*
+	 * The dot-separated fully qualified name of the focus type, or null of none.
+	 */
+	protected String focusQualifiedName;
+
+	public HierarchyBuilder(TypeHierarchy hierarchy) throws JavaModelException {
+
+		this.hierarchy = hierarchy;
+		JavaProject project = (JavaProject) hierarchy.javaProject();
+
+		IType focusType = hierarchy.getType();
+		org.eclipse.jdt.core.ICompilationUnit unitToLookInside = focusType == null ? null : focusType.getCompilationUnit();
+		org.eclipse.jdt.core.ICompilationUnit[] workingCopies = this.hierarchy.workingCopies;
+		org.eclipse.jdt.core.ICompilationUnit[] unitsToLookInside;
+		if (unitToLookInside != null) {
+			int wcLength = workingCopies == null ? 0 : workingCopies.length;
+			if (wcLength == 0) {
+				unitsToLookInside = new org.eclipse.jdt.core.ICompilationUnit[] {unitToLookInside};
+			} else {
+				unitsToLookInside = new org.eclipse.jdt.core.ICompilationUnit[wcLength+1];
+				unitsToLookInside[0] = unitToLookInside;
+				System.arraycopy(workingCopies, 0, unitsToLookInside, 1, wcLength);
+			}
+		} else {
+			unitsToLookInside = workingCopies;
+		}
+		if (project != null) {
+			// GROOVY start - pulled out of the call
+			Map optionMap = project.getOptions(true);
+			CompilerUtils.configureOptionsBasedOnNature(optionMap, project);
+			// GROOVY end
+			SearchableEnvironment searchableEnvironment = project.newSearchableNameEnvironment(unitsToLookInside);
+			this.nameLookup = searchableEnvironment.nameLookup;
+			this.hierarchyResolver =
+				new HierarchyResolver(
+					searchableEnvironment,
+					// GROOVY start
+					/* old {
+					project.getOptions(true),
+					} new */
+					optionMap,
+					// GROOVY end
+					this,
+					new DefaultProblemFactory());
+		}
+		this.infoToHandle = new HashMap(5);
+		this.focusQualifiedName = focusType == null ? null : focusType.getFullyQualifiedName();
+	}
+
+	public abstract void build(boolean computeSubtypes)
+		throws JavaModelException, CoreException;
+	/**
+	 * Configure this type hierarchy by computing the supertypes only.
+	 */
+	protected void buildSupertypes() {
+		IType focusType = getType();
+		if (focusType == null)
+			return;
+		// get generic type from focus type
+		IGenericType type;
+		try {
+			type = (IGenericType) ((JavaElement) focusType).getElementInfo();
+		} catch (JavaModelException e) {
+			// if the focus type is not present, or if cannot get workbench path
+			// we cannot create the hierarchy
+			return;
+		}
+		//NB: no need to set focus type on hierarchy resolver since no other type is injected
+		//    in the hierarchy resolver, thus there is no need to check that a type is
+		//    a sub or super type of the focus type.
+		this.hierarchyResolver.resolve(type);
+
+		// Add focus if not already in (case of a type with no explicit super type)
+		if (!this.hierarchy.contains(focusType)) {
+			this.hierarchy.addRootClass(focusType);
+		}
+	}
+	/**
+	 * Connect the supplied type to its superclass & superinterfaces.
+	 * The superclass & superinterfaces are the identical binary or source types as
+	 * supplied by the name environment.
+	 */
+	public void connect(
+		IGenericType type,
+		IType typeHandle,
+		IType superclassHandle,
+		IType[] superinterfaceHandles) {
+
+		/*
+		 * Temporary workaround for 1G2O5WK: ITPJCORE:WINNT - NullPointerException when selecting "Show in Type Hierarchy" for a inner class
+		 */
+		if (typeHandle == null)
+			return;
+		if (TypeHierarchy.DEBUG) {
+			System.out.println(
+				"Connecting: " + ((JavaElement) typeHandle).toStringWithAncestors()); //$NON-NLS-1$
+			System.out.println(
+				"  to superclass: " //$NON-NLS-1$
+					+ (superclassHandle == null
+						? "<None>" //$NON-NLS-1$
+						: ((JavaElement) superclassHandle).toStringWithAncestors()));
+			System.out.print("  and superinterfaces:"); //$NON-NLS-1$
+			if (superinterfaceHandles == null || superinterfaceHandles.length == 0) {
+				System.out.println(" <None>"); //$NON-NLS-1$
+			} else {
+				System.out.println();
+				for (int i = 0, length = superinterfaceHandles.length; i < length; i++) {
+					if (superinterfaceHandles[i] == null) continue;
+					System.out.println(
+						"    " + ((JavaElement) superinterfaceHandles[i]).toStringWithAncestors()); //$NON-NLS-1$
+				}
+			}
+		}
+		// now do the caching
+		switch (TypeDeclaration.kind(type.getModifiers())) {
+			case TypeDeclaration.CLASS_DECL :
+			case TypeDeclaration.ENUM_DECL :
+				if (superclassHandle == null) {
+					this.hierarchy.addRootClass(typeHandle);
+				} else {
+					this.hierarchy.cacheSuperclass(typeHandle, superclassHandle);
+				}
+				break;
+			case TypeDeclaration.INTERFACE_DECL :
+			case TypeDeclaration.ANNOTATION_TYPE_DECL :
+>>>>>>> patch
 				// https://bugs.eclipse.org/bugs/show_bug.cgi?id=329663
 				if (this.hierarchy.typeToSuperInterfaces.get(typeHandle) == null)
-					this.hierarchy.addInterface(typeHandle);
+				this.hierarchy.addInterface(typeHandle);
 				break;
 		}
 		if (superinterfaceHandles == null) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2011 IBM Corporation and others.
+ * Copyright (c) 2000, 2014 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,13 +7,24 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *        Andy Clement (GoPivotal, Inc) aclement@gopivotal.com - Contributions for
+ *                          Bug 383624 - [1.8][compiler] Revive code generation support for type annotations (from Olivier's work)
+ *                          Bug 409245 - [1.8][compiler] Type annotations dropped when call is routed through a synthetic bridge method
+ *                          Bug 409250 - [1.8][compiler] Various loose ends in 308 code generation
+ *        Stephan Herrmann - Contribution for
+ *							Bug 400874 - [1.8][compiler] Inference infrastructure should evolve to meet JLS8 18.x (Part G of JSR335 spec) 
+ *							Bug 424415 - [1.8][compiler] Eventual resolution of ReferenceExpression is not seen to be happening.
+ *							Bug 427438 - [1.8][compiler] NPE at org.eclipse.jdt.internal.compiler.ast.ConditionalExpression.generateCode(ConditionalExpression.java:280)
  *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
+
+import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.INVOCATION_CONTEXT;
 
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.AllocationExpression;
 import org.eclipse.jdt.internal.compiler.ast.CastExpression;
 import org.eclipse.jdt.internal.compiler.ast.Expression;
+import org.eclipse.jdt.internal.compiler.ast.InnerInferenceHelper;
 import org.eclipse.jdt.internal.compiler.ast.ParameterizedQualifiedTypeReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.ast.Wildcard;
@@ -48,7 +59,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, 	boolea
 	ReferenceBinding allocatedType = codegenBinding.declaringClass;
 
 	if (codegenBinding.canBeSeenBy(allocatedType, this, currentScope)) {
-		codeStream.new_(allocatedType);
+		codeStream.new_(this.type, allocatedType);
 		if (valueRequired) {
 			codeStream.dup();
 		}
@@ -77,7 +88,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, 	boolea
 				this);
 		}
 		// invoke constructor
-		codeStream.invoke(Opcodes.OPC_invokespecial, codegenBinding, null /* default declaringClass */);
+		codeStream.invoke(Opcodes.OPC_invokespecial, codegenBinding, null /* default declaringClass */, this.typeArguments);
 	} else {
 		// private emulation using reflect
 		codeStream.generateEmulationForConstructor(currentScope, codegenBinding);
@@ -147,14 +158,14 @@ public TypeBinding resolveType(BlockScope scope) {
 	// resolve type arguments (for generic constructor call)
 	if (this.typeArguments != null) {
 		int length = this.typeArguments.length;
-		boolean argHasError = scope.compilerOptions().sourceLevel < ClassFileConstants.JDK1_5;
+		this.argumentsHaveErrors = scope.compilerOptions().sourceLevel < ClassFileConstants.JDK1_5;
 		this.genericTypeArguments = new TypeBinding[length];
 		for (int i = 0; i < length; i++) {
 			TypeReference typeReference = this.typeArguments[i];
 			if ((this.genericTypeArguments[i] = typeReference.resolveType(scope, true /* check bounds*/)) == null) {
-				argHasError = true;
+				this.argumentsHaveErrors = true;
 			}
-			if (argHasError && typeReference instanceof Wildcard) {
+			if (this.argumentsHaveErrors && typeReference instanceof Wildcard) {
 				scope.problemReporter().illegalUsageOfWildcard(typeReference);
 			}
 		}
@@ -162,7 +173,7 @@ public TypeBinding resolveType(BlockScope scope) {
 			scope.problemReporter().diamondNotWithExplicitTypeArguments(this.typeArguments);
 			return null;
 		}
-		if (argHasError) {
+		if (this.argumentsHaveErrors) {
 			if (this.arguments != null) { // still attempt to resolve arguments
 				for (int i = 0, max = this.arguments.length; i < max; i++) {
 					this.arguments[i].resolveType(scope);
@@ -176,20 +187,26 @@ public TypeBinding resolveType(BlockScope scope) {
 	boolean argsContainCast = false;
 	TypeBinding[] argumentTypes = Binding.NO_PARAMETERS;
 	if (this.arguments != null) {
-		boolean argHasError = false;
+		this.argumentsHaveErrors = false;
 		int length = this.arguments.length;
 		argumentTypes = new TypeBinding[length];
+		TypeBinding argumentType;
 		for (int i = 0; i < length; i++) {
 			Expression argument = this.arguments[i];
 			if (argument instanceof CastExpression) {
 				argument.bits |= DisableUnnecessaryCastCheck; // will check later on
 				argsContainCast = true;
 			}
-			if ((argumentTypes[i] = argument.resolveType(scope)) == null) {
-				argHasError = true;
+			argument.setExpressionContext(INVOCATION_CONTEXT);
+			if ((argumentType = argumentTypes[i] = argument.resolveType(scope)) == null) {
+				this.argumentsHaveErrors = true;
+			}
+			if (argumentType != null && argumentType.kind() == Binding.POLY_TYPE) {
+				if (this.innerInferenceHelper == null)
+					this.innerInferenceHelper = new InnerInferenceHelper();
 			}
 		}
-		if (argHasError) {
+		if (this.argumentsHaveErrors) {
 			return this.resolvedType;
 		}
 	}
@@ -201,15 +218,18 @@ public TypeBinding resolveType(BlockScope scope) {
 		return this.resolvedType;
 	}
 	if (isDiamond) {
-		TypeBinding [] inferredTypes = inferElidedTypes(((ParameterizedTypeBinding) this.resolvedType).genericType(), null, argumentTypes, scope);
+		TypeBinding [] inferredTypes = inferElidedTypes((ParameterizedTypeBinding) this.resolvedType, null, argumentTypes, scope);
 		if (inferredTypes == null) {
 			scope.problemReporter().cannotInferElidedTypes(this);
 			return this.resolvedType = null;
 		}
 		this.resolvedType = this.type.resolvedType = scope.environment().createParameterizedType(((ParameterizedTypeBinding) this.resolvedType).genericType(), inferredTypes, ((ParameterizedTypeBinding) this.resolvedType).enclosingType());
  	}
+	
 	ReferenceBinding allocatedType = (ReferenceBinding) this.resolvedType;
-	if (!(this.binding = scope.getConstructor(allocatedType, argumentTypes, this)).isValidBinding()) {
+	this.binding = findConstructorBinding(scope, this, allocatedType, argumentTypes);
+
+	if (!this.binding.isValidBinding()) {	
 		if (this.binding instanceof ProblemMethodBinding
 			&& ((ProblemMethodBinding) this.binding).problemId() == NotVisible) {
 			if (this.evaluationContext.declaringTypeName != null) {
